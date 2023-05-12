@@ -1,0 +1,460 @@
+#!/bin/env bash
+
+
+#### AUTHOR       : Roland Scott McIntire
+#### DATE         : Oct 2022
+#### LAST MODIFIED: May 7,  2023
+#### DESCRIPTION  : Generalizes the New York Times Spelling Bee mini puzzle.
+####                Provides the maximum possible score for the puzzle as well. 
+####                The scoring is done as per the New York Times:
+####                  - Any word with length  < MIN_WORD_LENGTH score as 0
+####                  - Any word with length  = MIN_WORD_LENGTH score as 1
+####                  - Any word with length  > MIN_WORD_LENGTH score as its word length.
+####                  - If a word uses all of the inner and outer letters then that word is assigned an additional 7 points.
+####                Here, MIN_WORD_LENGTH is by default set to 4; however, the user can change this through the option -m.
+####
+####                The puzzle has a set of "outer" (May Only Use) letters along with a
+####                set of "inner" (Must Use) letters.
+####
+####                Problem: Find all non-proper words consisting only of the letters in the 
+####                         combined alphabet (outer + inner) -- the alphabet universe -- with the condition that all
+####                         such words must contain every letter in the "Must Use" list.
+####                NOTE I : This program is allowed to reuse characters when generating words.
+####                NOTE II: The default minimum word length is 4 letters. This can be changed with the option -m.
+####                         However, the minimum can't be set lower than the game minimum of 2.
+####
+#### USAGE        : Usage: sbee [-h] [-v] [-m min-word-length (4)] may-use-letters must-use-letters
+####                Here, may-use-letters is generalization of the "outer" letters in the NYT puzzle and
+####                must-use-letters is the generalization of the "inner" letter in the NYT puzzle.
+####
+#### DETAILS      :LETTER LIST PROCESSING: 
+####                - The program allows "letter range expressions" to describe ranges of consecutive letters.
+####                  Such an expression has the form: [<X>-<Y>].
+####                  In the program, this is expanded to all the letters between <X> and <Y> inclusive.
+####                  The order does not matter. For instance, [a-d] and [d-a] both yield the same 
+####                  set of letters: a,b,c,d.
+####                - Case does not matter as all letters are lower cased.
+####                - Non-letter characters input by the user will be removed.
+####                - Each of "MAY-USE" and "MUST-USER" lists are rendered to lists of unique characters before final processing.
+####                - If either of the "MAY-USE" or "MUST-USE" lists are empty after the list processing
+####                  processing stops and an error message is emitted.
+####
+####               OPTIONS: 
+####                The -m option specifies the minimum word length allowed to be considered when
+####                constructing a solution.
+####                The default is 4 (MIN_WORD_LENGTH). This value can't go below the game minimum, currently 2 (GAME_MIN_WORD_LENGTH). 
+####                If the user specifies to do so, a warning is issued and the minimum is set to the game minimum.
+####
+####                The -v option provides information on what the alphabet that is used and the corresponding MAY-USE
+####                and MUST-USE letters that result from the letter expressions provided on the command line.
+####                For instance, given the command: sbee -v [a-i] oy[r-v] 
+####                The program will provide the following output before providing the solution:
+####                  ALPHABET: abcdefghi:orstuvy
+####                  MAY-USE : abcdefghi
+####                  MUST-USE: orstuvy
+####                In this case, there are only two words that satisfy the conditions of this example:
+####                   virtuosity
+####                   voyeuristic
+####
+#### EXAMPLES     : For further examples, run sbee with -h option: sbee -h
+
+
+## Run BASH in "strict mode".
+set -euo pipefail
+
+###--------------------------------------------------------------------------------
+### ------         SHELL CMD PATHS, COLORS, and GAME PARAMETERS      --------------
+###--------------------------------------------------------------------------------
+
+## Full paths to: awk, grep, sed, sort, tr, and uniq.
+AWK=/bin/gawk
+BASENAME=/bin/basename
+CUT=/bin/cut
+GREP=/bin/egrep
+SED=/bin/sed
+SORT=/bin/sort
+TR=/bin/tr
+UNIQ=/bin/uniq
+
+## Standard program names and their full paths.
+program_names=( "AWK"  "BASENAME" "CUT"  "GREP"  "SED"  "SORT" "TR"  "UNIQ"  )
+programs=(      "$AWK" "$BASENAME" "$CUT" "$GREP"  "$SED" "$SORT" "$TR" "$UNIQ" )
+
+## Colors: Used to turn on and off ANSI text coloring for the terminal.
+RED='\033[0;31m'    # RED
+GREEN='\033[0;32m'  # GREEN
+BLUE='\033[0;34m'   # BLUE
+NC='\033[0m'        # NORMAL COLOR
+
+## LINUX UTILITY FILE: A US dictionary of proper and non-proper words listed one word per line.
+##                     These words are not stemmed and include proper nouns; however, our solutions
+##                     will not use any of these proper nouns. As proper nouns have capital letters
+##                     we will lower case all user supplied letters.
+DICTIONARY_LOC=/usr/share/dict/
+PROGNAME=${BLUE}${0##*/}${NC}
+VERBOSE=1 # Not verbose by default
+
+## Game parameters (alphabet size, minimum word length allowed in all games <GAME_MIN_WORD_LENGTH>,
+## and minimum word length for this game, <MIN_WORD_LENGTH>.
+MIN_WORD_LENGTH=4         ## May be overridden (option -m) -- word length minimum for THIS game.
+GAME_MIN_WORD_LENGTH_=2   ## May NOT be overridden         -- word length minimum for ANY  game.0
+ENGLISH_TYPE="american"
+
+## Get this script name without its path.
+if [ ! -e $BASENAME ]; then
+  echo "The program \"$BASENAME\" does not exist." 1>&2
+  exit 1
+elif [ ! -x $BASENAME ]; then
+  echo "The program \"$BASENAME\" is not executable by this user." 1>&2
+  exit 2 
+fi
+
+## Get the name of this script.
+cmd=$($BASENAME "$0")
+
+
+###--------------------------------------------------------------------------------
+### --------       UTILITY FUNCTIONS    -------------------------------------------
+###--------------------------------------------------------------------------------
+
+## Provides a usage message (along with examples) for this program.
+Usage() {
+    echo -e "${GREEN}Usage:${NC} ${PROGNAME}\t [-h] [-b] [-v] [-m min-word-length(${RED}4${NC})]">&2
+    echo -e "\t\t may-use-letters   must-use-letters"                                            >&2
+    echo -e "\n${GREEN}Description:${NC} Solves a generalization of the NYT's"                   >&2
+    echo -e " \"Spelling Bee\" Mini Puzzle. Finds all words (American English) using"            >&2
+    echo -e " ${RED}any${NC} letters from the may-use-letters list and ${RED}all${NC}"           >&2
+    echo -e " letters from the must-use-letters list."                                           >&2
+    echo -e "\n${GREEN}Example 1:${NC} ${PROGNAME} oavtle g"                                     >&2
+    echo -e " Find all words from the alphabet, \"oavtle\" + \"g\", where \"g\" has to be used." >&2
+    echo -e " Uses default minimum word length of ${GREEN}4${NC}."                               >&2
+    echo -e " There is one special word, \"volatage\" -- special here means"                     >&2
+    echo -e " a word that uses all the letters from the may-use and must-use lists."             >&2
+    echo -e "\n${GREEN}Example 2:${NC} ${PROGNAME} -m 5 clodym ef"                               >&2
+    echo -e " Set the minimum word length to 5."                                                 >&2
+    echo -e "\n${GREEN}Example 3:${NC} ${PROGNAME} -v [a-i] oy[r-v]"                             >&2
+    echo -e " Use the range syntax, [<X>-<Y>], to describe the letter lists."                    >&2
+    echo -e " Here the expanded may-use and must-use lists are: abcdefghi and orstuvy."          >&2
+    echo -e "\n${GREEN}Example 4:${NC} ${PROGNAME} -v [a-i]k[l-n] oy[r-v]"                       >&2
+    echo -e " Here the expanded may-use and must-use lists are: abcdefghiklmn and orstuvy."      >&2
+    echo -e "\n${GREEN}Example 5:${NC} ${PROGNAME} [a-z] able"                                   >&2
+    echo -e " This is an example of how to trick sbee into creating words"                       >&2
+    echo -e " from a list, forcing it to use ${RED}ALL${NC} the letters from the list: able"     >&2
+    echo -e " for each word it produces. It may also use any other letter for the"               >&2
+    echo -e " construction besides these four."                                                  >&2
+    echo -e "\n${GREEN}Example 6:${NC} ${PROGNAME} a able"                                       >&2
+    echo -e " This is an example of how to trick sbee into creating words"                       >&2
+    echo -e " from a list, forcing it to use ${RED}ALL${NC} and ${RED}ONLY${NC} the letters"     >&2 
+    echo -e " from the list: able."                                                              >&2
+    echo -e "\n${GREEN}Example 7:${NC} ${PROGNAME} [a-z] aeiouy"                                 >&2
+    echo -e " Find all words that use every vowel including 'y'."                                >&2
+    echo -e "\n${GREEN}Example 8:${NC} ${PROGNAME} -b [a-z] aeiouy"                              >&2
+    echo -e " Find all British English words that use every vowel including 'y'."                >&2
+}
+
+## Check for existence of supporting programs.
+check_exists() {
+  local prgs=($@)
+  local N=$((${#prgs[@]} / 2))
+  local ary=("\n${GREEN}NAME\t-> PATH${NC}")
+
+  ## Need to take care of this program first as it is used below.
+  if [[ (! -e "$CUT") || (! -x "$CUT") ]]; then
+    ary[1]=$(echo "\nCUT -> $CUT")
+    echo "${arg[@]}"
+    return 10
+  fi
+
+  ## Check for existence/executability of supporting programs.
+  for i in $(eval echo {0..$((N-1))}); do
+    prg=$(echo ${prgs[$i]} | $CUT -d" " -f1 || true)
+    prgn=$(echo ${prgs[$((i + N))]} | $CUT -d" " -f1 || true)
+
+    ## Check for executability of program, $prg.
+    if [[ (! -e "$prg") || (! -x "$prg") ]]; then
+      ary[$i]="\n$prgn\t-> $prg"
+    fi
+  done
+
+  ## Check if there were missing programs, if so return error.
+  if [[ ${#ary[@]} -eq 1 ]]; then
+    ## Return success
+    return 0
+  else
+    echo "${ary[@]}"
+    return 20 
+  fi
+}
+
+
+## Score the list of words using the generalization of the NYT method described above.
+score_words() {
+  words="$1"
+
+  scores=$(echo -e $words | $TR ' ' '\n' | while read str; do
+      x=${#str}
+      if [ "$x" -lt $MIN_WORD_LENGTH ]; then
+        echo 0;
+      elif [ "$x" -eq $MIN_WORD_LENGTH ]; then
+        echo 1;
+      else
+        echo "$x";
+      fi 
+   done)
+
+  echo $scores
+}
+
+## Get the sum of a list of scores.
+sum_scores() {
+  scores="$1"
+
+  sum=$(echo $scores | $TR ' ' '\n' | $AWK -F" " '{x += $1;}END{print x;}')
+  echo $sum
+}
+
+## Convert string to lower case.
+toLower() {
+    echo "$1" | $TR [:upper:] [:lower:]
+}
+
+
+## Explode (potentially embedded) character ranges. Character ranges like "[a-e]" are expanded to "abcde".
+explodeString() {
+
+    ## Replace all occurrences of [<x>-<y>] with {<x>..<y>}.
+    ## The latter syntax is a BASH range syntax which can be evaluated to produce
+    ## a sequential list of characters.
+    ## The conversion results in a space separated list of strings of the
+    ## form: {<x1>..<y1>} {<x1>..<y1>} ... <character string>
+    str=$(echo "$1" | $SED -re 's/\[(.)-(.)\]/ {\1..\2} /g')
+    nstr=""
+
+    ## Walk over the (BASH) range descriptions along with remaining characters
+    ## expanding out the ranges and concatenating all expanded (and ordinary) strings together.
+    for x in $str; do
+        ## If $x is a range, expand it and append to <nstr>; otherwise, $x is
+        ## a regular string -- so append to <nstr>.
+        if [[ $x =~ \{.\.\..\} ]]; then  # Explode range to a string and append to nstr.
+            lst=$(for i in $(eval echo "$x"); do
+                      echo $i
+                  done)
+            ## Remove the spaces in the list, $lst, and append to <nstr>.
+            nstr=${nstr}${lst}
+        else ## Append ordinary string to <nstr>.
+            nstr=${nstr}$x
+        fi
+    done
+
+    ## Return the final list of characters -- there may be duplicate characters.
+    echo $(echo $nstr | $SED -r 's/ +//g')
+}
+
+
+## Checks to see if a string has unique letters.
+isUnique() {
+    origLen=${#1}
+
+    nlst=$(echo -n $1 | $SED -r 's/./&\n/g' | $SORT | $UNIQ)
+    nlst=$(echo $nlst | $SED -r 's/ //g')
+    len=${#nlst}
+    if [ $len -eq $origLen ]; then   
+        echo 0                      # Unique
+    else
+        echo 1                      # Not Unique
+    fi
+}
+
+
+## Takes a string and returns a string consisting of the unique string entries.
+uniqify() {
+    origLen=${#1}
+    nlst=$(echo -n $1 | $SED -r 's/./&\n/g' | $SORT | $UNIQ)
+    nlst=$(echo $nlst | $SED -r 's/ //g')
+    echo $nlst
+}
+
+
+
+###--------------------------------------------------------------------------------
+### --------       PROCESS CMD LINE OPTIONS    ------------------------------------
+###--------------------------------------------------------------------------------
+while getopts ":bhvm:" opt; do
+    case $opt in 
+        b) ENGLISH_TYPE="british"
+           ;;
+        h) Usage
+           exit 3
+           ;;
+        m) MIN_WORD_LENGTH="$OPTARG"
+           ;;
+        v) VERBOSE=0
+           ;;
+        :) echo "$OPTARG requires an argument." >&2
+           exit 4
+           ;;
+        \?) echo "Invalid option: -$OPTARG ."   >&2
+            exit 5
+            ;;
+    esac
+done
+
+## The type of the english dictionary to use.
+DICTIONARY_LANGUAGE="${ENGLISH_TYPE}-english"
+
+## Reset the argument counter.
+shift $((OPTIND - 1))
+
+## Check that the supporting programs used in this script exist.
+## Turn 'failure on command' off.
+set +e
+
+## Check that the supporting programs used in this script exist.
+missing_prgs=$(check_exists "${programs[@]}" "${program_names[@]}")
+if [ $? -ne 0 ]; then
+  echo -e "\n${RED}ERROR($cmd):${NC} Missing/non-executable supporting programs:$missing_prgs" >&2
+  echo -e "\nAborting, no action taken."                                                       >&2
+  exit 6
+fi
+
+## Turn 'failure on command' back on.
+set -e
+
+## Expecting two arguments, the OUTER ("May Only Use") letters
+## and the INNER ("Must Use") letters.
+## Remove any embedded spaces before assigning them from the command line.
+OUTER=$(echo -e "$1" | $SED -r 's/[[:space:]]+//g' || true)
+INNER=$(echo -e "$2" | $SED -r 's/[[:space:]]+//g' || true)
+
+
+###--------------------------------------------------------------------------------
+### --------       ERROR CHECK      -----------------------------------------------
+###--------------------------------------------------------------------------------
+
+## Check that the minimum word length is a number.
+MIN_WORD_LENGTHCHK=$((${MIN_WORD_LENGTH} + 0))
+if [ ${MIN_WORD_LENGTHCHK} -eq 0 ]; then
+   echo -e "${RED}ERROR:${NC} Minimum word length value, \"${MIN_WORD_LENGTH}\", is not a number." >&2
+   echo -e "${RED}Aborting, no action taken.${NC}"                                                 >&2
+   exit 7
+fi
+
+## Minimum word length for this game can't be less than the game minimum.
+if [ ${MIN_WORD_LENGTH} -lt ${GAME_MIN_WORD_LENGTH_} ]; then
+   echo -e "${GREEN}WARNING:${NC} User minimum word length setting of, \"${MIN_WORD_LENGTH}\", will be overridden\n\t\tby game minimum, \"$GAME_MIN_WORD_LENGTH_\"." >&2
+   MIN_WORD_LENGTH=${GAME_MIN_WORD_LENGTH_}
+fi
+
+
+## Check for the right number of arguments -- should be two: the allowable string and a must-use string.
+if [ $# -ne 2 ]; then
+   echo -e "${RED}ERROR:${NC} Wrong number of arguments.\n"     >&2
+   Usage
+   echo -e "\n${RED}Aborting, no action taken.${NC}"            >&2
+   exit 8
+fi
+
+
+## The outer letters (allowable) to choose from -- in lower case (to avoid proper nouns),
+## ranges exploded, and the resulting exploded string rendered to produce a string of unique characters.
+OUTER=$(uniqify $(explodeString $(toLower "$OUTER")))
+
+## Remove any non-letter characters.
+OUTER=$(echo $OUTER | $SED 's/[^a-z]//g' || true)
+
+## Make sure that OUTER is non-empty.
+if [ -z "${OUTER}" ]; then
+  echo -e "\n${RED}ERROR($cmd):${NC}The \"MAY-USE\" list, resulting from expansion processing is empty." 
+  exit 9
+fi
+
+## The inner (must-use) string to use -- in lower case (to avoid proper nouns),
+## ranges exploded, and the resulting exploded string rendered to produce a string of unique characters.
+INNER=$(uniqify $(explodeString $(toLower "$INNER")))
+
+## Remove any non-letter characters.
+INNER=$(echo $INNER | $SED 's/[^a-z]//g' || true)
+
+## Make sure that INNER is non-empty.
+if [ -z "${INNER}" ]; then
+  echo -e "\n${RED}ERROR($cmd):${NC}The \"MUST-USE\" list, resulting from expansion processing is empty." 
+  exit 10
+fi
+
+## The alphabet to use -- the concatenation of the outer and the inner strings.
+ALPHABET="${OUTER}${INNER}"
+
+
+## Check that the letters in our alphabet occur uniquely; if not, uniqify them.
+if [[ 1 -eq $(isUnique $ALPHABET) ]]; then
+   ALPHABET=$(uniqify "$ALPHABET")
+fi
+
+## If verbose flag, then describe INNER, OUTER, and ALPHABET.
+if [[ $VERBOSE = 0 ]]; then
+   echo -e   "${GREEN}ALPHABET:${NC} ${OUTER}:${INNER}"  >&2
+   echo -e   "${GREEN}MAY-USE :${NC} $OUTER"             >&2
+   echo -e   "${GREEN}MUST-USE:${NC} $INNER\n"           >&2
+fi
+
+###--------------------------------------------------------------------------------
+### --------       FIND ALL MATCHING WORDS      -----------------------------------
+###--------------------------------------------------------------------------------
+
+
+## Search the dictionary to find all words (of length at least MIN_WORD_LENGTH)
+## formed using (only) letters from the string ALPHABET.
+words=$($GREP "^[$ALPHABET]{$MIN_WORD_LENGTH,}$" ${DICTIONARY_LOC}${DICTIONARY_LANGUAGE} || true)
+
+## Then of these words, find all that contain at least one instance of each of the must-use letters.
+for el in $(echo "$INNER" | $SED -r 's/./&\n/g' || true); do
+    words=$(echo "$words" | $GREP "$el" || true)
+    if [ -z "$words" ]; then
+        echo -e "${RED}No words found.${NC}" >&2
+        exit 0
+    fi
+done
+
+## Find the special word(s) which match every  <INNER> and <OUTER> characters.
+all_chars=$(echo "${OUTER}${INNER}" | $SED  's/\(.\)/\1 /g' || true)
+swords=$words
+for x in $all_chars; do
+  swords=$(echo $swords | $TR ' ' '\n' | $GREP $x || true)
+done
+
+###--------------------------------------------------------------------------------
+### --------       COMPUTE OVERALL SCORE      -------------------------------------
+###--------------------------------------------------------------------------------
+#
+## Compute the special score that results from these words.
+special_score=0
+if [ -n "$swords" ]; then
+  for x in $swords; do
+    special_score=$(($special_score + 7))
+  done
+fi
+
+
+echo -e "Special Word(s):\n"
+echo -e "$swords" | $TR ' ' '\n'
+
+## Compute the addition score that these special words will contribute to the overall score.
+echo -e "\nSpecial Score = $special_score\n"
+
+
+## Score the words as described above (Use a generalization of the NYT method)
+scores=$(score_words "$words")
+
+## Sum the scores to get the maximum possible score that is achievable.
+max_regular_score=$(sum_scores "$scores")
+
+## Print the list of possible words.
+echo -e "\nAll Words:\n"
+echo -e $words | $TR ' ' '\n'
+
+## Print the maximum possible score: The regular score + the special score.
+echo -e "\nMaximum Possible Score = $(($max_regular_score + $special_score))"
+
+## Exit successfully
+exit 0
+
