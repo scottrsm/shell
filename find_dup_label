@@ -123,13 +123,13 @@ set +e
 ##
 ## Print "No Duplicate Labels Found" if we did not encounter any duplicates.
 TOKEN="ZX-YZXY-ZXYZXYZ-XYZX-Y"
-\find "$DIR" -name "${TEX_FILE_PAT}" -print0  | \xargs -I{} grep -I -v '^.*[^\]%.*\\label{[^}]*}.*$' {}  \
+\find "$DIR" -name "${TEX_FILE_PAT}" -print0  | \xargs -I{} --null grep -I -v '^.*[^\]%.*\\label{[^}]*}.*$' {}  \
    | \grep  '\\label{' | \sed 's/^.*\\label{\([^}]*\)}.*$/\1/' | \sort | \uniq -c | \sort -rn  \
    | \gawk  -F" " '{if ($1 > 1) {print($2);}}'                                                 \
    | while read -r duplabel; do 
        echo "Duplicate: $duplabel"; 
        \find "$DIR" -name "${TEX_FILE_PAT}" -print0                                            \
-       | \xargs -I{} grep -n "\\label{$duplabel}" {} /dev/null                                 \
+       | \xargs -I{} --null grep -n "\\label{$duplabel}" {} /dev/null                                 \
        | \sed "s/^/\\$TOKEN/" 
      done                                                                                      \
    | { read -r fline                                                                      
