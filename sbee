@@ -161,7 +161,7 @@ check_exists() {
   ## Need to take care of this program first as it is used below.
   if [[ (! -e "$CUT") || (! -x "$CUT") ]]; then
     ary[1]=$(echo "\nCUT -> $CUT")
-    echo "${arg[@]}"
+    echo "${ary[@]}"
     return 10
   fi
 
@@ -191,18 +191,18 @@ check_exists() {
 score_words() {
   words="$1"
 
-  scores=$(echo -e $words | $TR ' ' '\n' | while read str; do
+  scores=$(echo -e "$words" | $TR ' ' '\n' | while read -r str; do
       x=${#str}
-      if [ "$x" -lt $MIN_WORD_LENGTH ]; then
+      if [ "$x" -lt "$MIN_WORD_LENGTH" ]; then
         echo 0;
-      elif [ "$x" -eq $MIN_WORD_LENGTH ]; then
+      elif [ "$x" -eq "$MIN_WORD_LENGTH" ]; then
         echo 1;
       else
         echo "$x";
       fi 
    done)
 
-  echo $scores
+  echo "$scores"
 }
 
 ## Get the sum of a list of scores.
@@ -210,12 +210,12 @@ sum_scores() {
   scores="$1"
 
   sum=$(echo $scores | $TR ' ' '\n' | $AWK -F" " '{x += $1;}END{print x;}')
-  echo $sum
+  echo "$sum"
 }
 
 ## Convert string to lower case.
 toLower() {
-    echo "$1" | $TR [:upper:] [:lower:]
+    echo "$1" | $TR [[:upper:]] [[:lower:]]
 }
 
 
@@ -255,10 +255,10 @@ explodeString() {
 isUnique() {
     origLen=${#1}
 
-    nlst=$(echo -n $1 | $SED -r 's/./&\n/g' | $SORT | $UNIQ)
-    nlst=$(echo $nlst | $SED -r 's/ //g')
+    nlst=$(echo -n "$1" | $SED -r 's/./&\n/g' | $SORT | $UNIQ)
+    nlst=$(echo "$nlst" | $SED -r 's/ //g')
     len=${#nlst}
-    if [ $len -eq $origLen ]; then   
+    if [ "$len" -eq "$origLen" ]; then   
         echo 0                      # Unique
     else
         echo 1                      # Not Unique
@@ -269,8 +269,8 @@ isUnique() {
 ## Takes a string and returns a string consisting of the unique string entries.
 uniqify() {
     origLen=${#1}
-    nlst=$(echo -n $1 | $SED -r 's/./&\n/g' | $SORT | $UNIQ)
-    nlst=$(echo $nlst | $SED -r 's/ //g')
+    nlst=$(echo -n "$1" | $SED -r 's/./&\n/g' | $SORT | $UNIQ)
+    nlst=$(echo "$nlst" | $SED -r 's/ //g')
     echo $nlst
 }
 
@@ -360,7 +360,7 @@ fi
 OUTER=$(uniqify $(explodeString $(toLower "$OUTER")))
 
 ## Remove any non-letter characters.
-OUTER=$(echo $OUTER | $SED 's/[^a-z]//g' || true)
+OUTER=$(echo "$OUTER" | $SED 's/[^a-z]//g' || true)
 
 ## Make sure that OUTER is non-empty.
 if [ -z "${OUTER}" ]; then
@@ -373,7 +373,7 @@ fi
 INNER=$(uniqify $(explodeString $(toLower "$INNER")))
 
 ## Remove any non-letter characters.
-INNER=$(echo $INNER | $SED 's/[^a-z]//g' || true)
+INNER=$(echo "$INNER" | $SED 's/[^a-z]//g' || true)
 
 ## Make sure that INNER is non-empty.
 if [ -z "${INNER}" ]; then
@@ -430,7 +430,7 @@ done
 special_score=0
 if [ -n "$swords" ]; then
   for x in $swords; do
-    special_score=$(($special_score + 7))
+    special_score=$((special_score + 7))
   done
 fi
 
@@ -450,10 +450,10 @@ max_regular_score=$(sum_scores "$scores")
 
 ## Print the list of possible words.
 echo -e "\nAll Words:\n"
-echo -e $words | $TR ' ' '\n'
+echo -e "$words" | $TR ' ' '\n'
 
 ## Print the maximum possible score: The regular score + the special score.
-echo -e "\nMaximum Possible Score = $(($max_regular_score + $special_score))"
+echo -e "\nMaximum Possible Score = $((max_regular_score + special_score))"
 
 ## Exit successfully
 exit 0

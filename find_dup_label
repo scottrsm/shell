@@ -18,7 +18,6 @@ LRED='\033[1;31m'
 RED='\033[0;31m'
 LGREEN='\033[1;32m'
 LPURP='\033[1;35m'
-MAGENTA='\033[0;35m' 
 NC='\033[0m' # No Color
 
 ## Ascii Bolding
@@ -27,7 +26,7 @@ NORM=$(tput sgr0)
 
 
 ## Get the name of this script.
-cmd=$(basename $0)
+cmd=$(basename "$0")
 
 ## Default directory tree path to search and default LaTeX file extension glob pattern.
 DIR="."
@@ -84,25 +83,25 @@ shift $((OPTIND-1))
 
 ## Check for arguments -- should be none as we only allow options.
 if [[ $# -gt 0 ]]; then
-  echo -e "${BOLD}${LRED}This script does not take arguments -- only options.\n"${NC}${NORM}          1>&2
+  echo -e "${BOLD}${LRED}This script does not take arguments -- only options.\n${NC}${NORM}"          1>&2
   echo "<<<---- *HELP* ---->>>"                                                                       1>&2
   Usage
   echo "<<<---- *HELP* ---->>>"                                                                       1>&2
-  echo -e "\n${LRED}Aborting script, no action taken..."${NC}                                         1>&2
+  echo -e "\n${LRED}Aborting script, no action taken...${NC}"                                         1>&2
   exit 4
 fi
 
 ## Check that <DIR> is a directory.
 if [[ ! -d "$DIR" ]]; then
   echo -e "\n${BOLD}${LRED}Path, \"$DIR\", is not a directory.${NC}${NORM}"                           1>&2
-  echo -e "\n${LRED}Aborting script, no action taken..."${NC}                                         1>&2
+  echo -e "\n${LRED}Aborting script, no action taken...${NC}"                                         1>&2
   exit 5
 fi
 
 ## Check that <DIR> is a readable and scannable directory.
 if [[ ! ((-x "$DIR") && (-r "$DIR")) ]]; then
   echo -e "\n${BOLD}${LRED}Path, \"$DIR\", is NOT BOTH readable (-r) and scannable (-x).${NC}${NORM}" 1>&2
-  echo -e "\n${LRED}Aborting script, no action taken..."${NC}                                         1>&2
+  echo -e "\n${LRED}Aborting script, no action taken...${NC}"                                         1>&2
   exit 6
 fi
 
@@ -124,14 +123,13 @@ set +e
 ##
 ## Print "No Duplicate Labels Found" if we did not encounter any duplicates.
 TOKEN="ZX-YZXY-ZXYZXYZ-XYZX-Y"
-
-\find "$DIR" -name "${TEX_FILE_PAT}" | \xargs -i \grep -I -v '^.*[^\]%.*\\label{[^}]*}.*$' {}  \
+\find "$DIR" -name "${TEX_FILE_PAT}" -print0  | \xargs -I{} grep -I -v '^.*[^\]%.*\\label{[^}]*}.*$' {}  \
    | \grep  '\\label{' | \sed 's/^.*\\label{\([^}]*\)}.*$/\1/' | \sort | \uniq -c | \sort -rn  \
    | \gawk  -F" " '{if ($1 > 1) {print($2);}}'                                                 \
    | while read -r duplabel; do 
        echo "Duplicate: $duplabel"; 
-       \find "$DIR" -name "${TEX_FILE_PAT}"                                                    \
-       | \xargs -i \grep -n "\\label{$duplabel}" {} /dev/null                                  \
+       \find "$DIR" -name "${TEX_FILE_PAT}" -print0                                            \
+       | \xargs -I{} grep -n "\\label{$duplabel}" {} /dev/null                                 \
        | \sed "s/^/\\$TOKEN/" 
      done                                                                                      \
    | { read -r fline                                                                      
@@ -140,7 +138,7 @@ TOKEN="ZX-YZXY-ZXYZXYZ-XYZX-Y"
         else  
           echo $fline 
           while read -r rline; do 
-            echo $rline | \sed "s/^$TOKEN/   /"
+            echo "$rline" | \sed "s/^$TOKEN/   /"
           done 
         fi 
      }                                                                                         \
