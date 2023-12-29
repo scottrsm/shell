@@ -128,7 +128,7 @@ Usage() {
     echo -e "\n${GREEN}Example 1:${NC} ${PROGNAME} oavtle g"                                     >&2
     echo -e " Find all words from the alphabet, \"oavtle\" + \"g\", where \"g\" has to be used." >&2
     echo -e " Uses default minimum word length of ${GREEN}4${NC}."                               >&2
-    echo -e " There is one special word, \"volatage\" -- special here means"                     >&2
+    echo -e " There is one special word, \"voltage\" -- special here means"                      >&2
     echo -e " a word that uses all the letters from the may-use and must-use lists."             >&2
     echo -e "\n${GREEN}Example 2:${NC} ${PROGNAME} -m 5 clodym ef"                               >&2
     echo -e " Set the minimum word length to 5."                                                 >&2

@@ -29,7 +29,7 @@
 
     Find all words from the alphabet, "oavtle" + "g", where "g" has to be used.
     Uses default minimum word length of 4.
-    There is one special word, volatage -- special here means
+    There is one special word, "voltage" -- special here means
     a word that uses all the letters.
 
 **Example 2:** sbee -m 5 clodym ef
@@ -126,4 +126,6 @@
 
 **EXAMPLE 4  :** find_dup_label -d ~/proj/latex_proj -p *.[lt]??
 
+## Version
+1.0.1
 
