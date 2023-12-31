@@ -89,7 +89,7 @@
 -          file     : The file, text or html, to process.
 -          word_part: A word or word fragment.
 
-**EXAMPLE:**  find_word_part -c -f -p -u -x ~/movie_plays/the apartment.html wise
+**EXAMPLE:**  find_word_part -c -f -p -u -x ~/movie_plays/theapartment.html wise
 
     The screen play for the for "The Apartment" is processed (-x) as an HTML file, finding matches
     in words *strictly* containing the word part, "wise" (-p).

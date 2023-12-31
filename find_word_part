@@ -3,7 +3,7 @@
 
 #### AUTHOR       : Roland Scott McIntire
 #### DATE         : Dec 20, 2022
-#### LAST MODIFIED: May 7,  2023
+#### LAST MODIFIED: Dec 31, 2023
 #### DESCRIPTION  : Find all words in a text file that contain a given word part.
 ####                Output the words and the number of times they occur, ordered
 ####                primarily by this count and secondarily lexically by the words.
@@ -50,8 +50,8 @@ HTML2TEXT="/bin/html2text"
 cmd=$($BASENAME "$0")
 
 ## Standard program names and their full paths.
-program_names=( "AWK" "BASENAME" "CUT" "GREP" "RM" "SORT" "TR" "UNIQ"  )
-programs=("$AWK" "$BASENAME" "$CUT" "$GREPCHK" "$RM" "$SORT" "$TR" "$UNIQ" )
+program_names=( "AWK" "BASENAME"  "CUT"  "GREP"     "RM"  "SORT"  "TR"  "UNIQ"  )
+programs=(     "$AWK" "$BASENAME" "$CUT" "$GREPCHK" "$RM" "$SORT" "$TR" "$UNIQ" )
 
 ## Temp file. Used with the -x option to create a text from an HTML file.
 tmpFile="${cmd}_tmp.$$"

@@ -2,7 +2,7 @@
 
 #### AUTHOR       : Roland Scott McIntire
 #### DATE         : Dec 2022
-#### LAST MODIFIED: May 7,  2023
+#### LAST MODIFIED: Dec 31, 2023
 #### DESCRIPTION  : This script finds duplicate labels in LaTeX projects and outputs the files and line numbers for each duplicate.
 ####
 #### NOTE         : The script will avoid examining labels that have been commented out.
@@ -51,7 +51,7 @@ Usage() {
   echo -e "\n${LGREEN}EXAMPLE 1  :${NC} cd ~/proj/latex_proj; $cmd"                                              >&2
   echo -e "${LGREEN}EXAMPLE 2  :${NC} $cmd -d ~/proj/latex_proj "                                                >&2
   echo -e "${LGREEN}EXAMPLE 3  :${NC} $cmd -d ~/proj/latex_proj -p *.tex"                                        >&2
-  echo -e "${LGREEN}EXAMPLE 4  :${NC} $cmd -d ~/proj/latex_proj -p *.[lt]??"                                     >&2
+  echo -e "${LGREEN}EXAMPLE 4  :${NC} $cmd -d ~/proj/latex_proj -p *.[lt]*"                                      >&2
 }
 
 
