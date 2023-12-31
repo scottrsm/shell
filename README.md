@@ -1,7 +1,7 @@
 ## sbee 
 
 **DESCRIPTION:** A generalization of the NYT Spelling Bee mini-puzzle.
-                 A maximum score is generated for the problem in accordance with the NYT puzzle.
+                 A maximum score is generated for the problem in accordance with the NYT puzzle's rules.
 
 - A string of letters with length less than *min_word_length* provides no points.
 - A string of letters with length equal to *min_word_length* yields one point.
@@ -27,7 +27,7 @@
 
 **Example 1:** sbee oavtle g
 
-    Find all words from the alphabet, "oavtle" + "g", where "g" has to be used.
+    Find all words from the alphabet, "oavtle" + "g", where "g" must be used.
     Uses default minimum word length of 4.
     There is one special word, "voltage" -- special here means
     a word that uses all the letters.
@@ -127,5 +127,5 @@
 **EXAMPLE 4  :** find_dup_label -d ~/proj/latex_proj -p *.[lt]??
 
 ## Version
-1.0.1
+1.0.2
 
