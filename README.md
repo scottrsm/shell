@@ -124,8 +124,8 @@
 
 **EXAMPLE 3  :** find_dup_label -d ~/proj/latex_proj -p *.tex
 
-**EXAMPLE 4  :** find_dup_label -d ~/proj/latex_proj -p *.[lt]??
+**EXAMPLE 4  :** find_dup_label -d ~/proj/latex_proj -p *.[lt]*
 
 ## Version
-1.0.2
+1.0.3
 
