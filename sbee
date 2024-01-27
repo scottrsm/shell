@@ -66,7 +66,7 @@ set -euo pipefail
 # ------         SHELL CMD PATHS, COLORS, and GAME PARAMETERS      --------------
 #--------------------------------------------------------------------------------
 
-# Full paths to: awk, basename, cut, grep, sed, sort, tr, and uniq.
+# Full paths to: awk, basename, cut, egrep, sed, sort, tr, and uniq.
 AWK=/bin/gawk
 BASENAME=/bin/basename
 CUT=/bin/cut
@@ -215,7 +215,7 @@ sum_scores() {
 
 # Convert string to lower case.
 toLower() {
-    echo "$1" | $TR [[:upper:]] [[:lower:]]
+    echo "$1" | $TR [:upper:] [:lower:]
 }
 
 
