@@ -1,6 +1,5 @@
 #!/bin/env bash
 
-
 #### AUTHOR       : Roland Scott McIntire
 #### DATE         : Dec 20, 2022
 #### LAST MODIFIED: Dec 31, 2023
@@ -11,14 +10,13 @@
 ####
 #### USAGE        : findwordpart -h
 ####
-#### EXAMPLE      : findwordpart -x -p -f -u ~/movie_screenplays/theapartment.html wise 
+#### EXAMPLE      : findwordpart -x -p -f -u ~/movie_screenplays/theapartment.html wise
 ####                This command line:
 ####                  1). (-x): Converts an HTML file to a text file.
 ####                  2). (-p): Treats "wise" as a word fragment, only finding matches in larger
 ####                            word fragments or words.
 ####                  3). (-f): Folds the matches to lower case.
 ####                  4). (-u): Generates the unique matches in lexical order.
-
 
 ## Run BASH in "strict mode".
 set -euo pipefail
@@ -34,15 +32,15 @@ NC='\033[0m'         # NORMAL COLOR
 AWK="/bin/gawk"
 BASENAME="/bin/basename"
 CUT="/bin/cut"
-GREP="/bin/grep -E"
-GREPCHK="/bin/grep"
+GREP="/bin/egrep -E"
+GREPCHK="/bin/egrep"
 RM="/bin/rm"
 SORT="/bin/sort"
 TR="/bin/tr"
 UNIQ="/bin/uniq"
 
-## Non-standard command, needed when using the -x option which 
-## scraps a html file, placing contents into a temporary text file 
+## Non-standard command, needed when using the -x option which
+## scraps a html file, placing contents into a temporary text file
 ## for further processing.
 HTML2TEXT="/bin/html2text"
 
@@ -50,121 +48,131 @@ HTML2TEXT="/bin/html2text"
 cmd=$($BASENAME "$0")
 
 ## Standard program names and their full paths.
-program_names=( "AWK" "BASENAME"  "CUT"  "GREP"     "RM"  "SORT"  "TR"  "UNIQ"  )
-programs=(     "$AWK" "$BASENAME" "$CUT" "$GREPCHK" "$RM" "$SORT" "$TR" "$UNIQ" )
+program_names=("AWK" "BASENAME" "CUT" "GREP" "RM" "SORT" "TR" "UNIQ")
+programs=("$AWK" "$BASENAME" "$CUT" "$GREPCHK" "$RM" "$SORT" "$TR" "$UNIQ")
 
 ## Temp file. Used with the -x option to create a text from an HTML file.
 tmpFile="${cmd}_tmp.$$"
 
 ## By default, we don't want any of the options set: -c, -f, -p, -u, -w, -x.
-CASESENSITIVEFLAG=1; FOLDFLAG=1; PARTFLAG=1; UNIQFLAG=1; WORDFLAG=1; HTMLFLAG=1
+CASESENSITIVEFLAG=1
+FOLDFLAG=1
+PARTFLAG=1
+UNIQFLAG=1
+WORDFLAG=1
+HTMLFLAG=1
 
 ###--------------------------------------------------------------------------------
 ### --------       FUNCTIONS      -------------------------------------------------
 ###--------------------------------------------------------------------------------
 
-
 ## Function generates a usage message.
 usage() {
-  local cmd="$1"
+	local cmd="$1"
 
-
-  echo -e "\n${GREEN}DESCRIPTION:${NC} Find all words in a file that contain a given word or word part."    >&2
-  echo "             By default, matches ignore case and are ordered by "                                   >&2
-  echo "             number of occurrences, and secondarily ordered lexically."                             >&2
-  echo -e "\n${GREEN}USAGE  :${NC} ${MAGENTA}${cmd}${NC} [-h] [-c] [-f] [-p] [-u] [-w] [-x] file word_part" >&2
-  echo -e "\n${GREEN}Options:${NC}"                                                                         >&2
-  echo "         -h -- Help message."                                                                       >&2
-  echo "         -c -- Use strict case matching."                                                           >&2
-  echo "         -f -- After match, fold cases into lower case."                                            >&2
-  echo "         -p -- Look only for words that strictly contain <word_part>."                              >&2
-  echo "         -u -- Display the unique matches ordered lexically."                                       >&2
-  echo "         -w -- Look for words that fully match <word_part>."                                        >&2
-  echo "         -x -- Assume input file is an html file."                                                  >&2
-  echo -e "\n${GREEN}Args   :${NC}"                                                                         >&2
-  echo -e "          file     : The file, text or html, to process."                                        >&2
-  echo "          word_part: A word or word fragment."                                                      >&2
-  echo -e "\n${GREEN}EXAMPLE:${NC}  $cmd -c -f -p -u -x ~/movie_plays/theapartment.html wise"               >&2
-  echo -e "\n          In this example an HTML file is processed (-x), finding matches"                     >&2
-  echo "          in words strictly containing the word part, \"wise\" (-p)."                               >&2
-  echo "          The matching for \"wise\" is done using case sensitive matching (-c)."                    >&2
-  echo "          The unique (-u), case folded (-f), matches are"                                           >&2
-  echo "          listed in alphabetical order."                                                            >&2
+	echo -e "\n${GREEN}DESCRIPTION:${NC} Find all words in a file that contain a given word or word part." >&2
+	echo "             By default, matches ignore case and are ordered by " >&2
+	echo "             number of occurrences, and secondarily ordered lexically." >&2
+	echo -e "\n${GREEN}USAGE  :${NC} ${MAGENTA}${cmd}${NC} [-h] [-c] [-f] [-p] [-u] [-w] [-x] file word_part" >&2
+	echo -e "\n${GREEN}Options:${NC}" >&2
+	echo "         -h -- Help message." >&2
+	echo "         -c -- Use strict case matching." >&2
+	echo "         -f -- After match, fold cases into lower case." >&2
+	echo "         -p -- Look only for words that strictly contain <word_part>." >&2
+	echo "         -u -- Display the unique matches ordered lexically." >&2
+	echo "         -w -- Look for words that fully match <word_part>." >&2
+	echo "         -x -- Assume input file is an html file." >&2
+	echo -e "\n${GREEN}Args   :${NC}" >&2
+	echo -e "          file     : The file, text or html, to process." >&2
+	echo "          word_part: A word or word fragment." >&2
+	echo -e "\n${GREEN}EXAMPLE:${NC}  $cmd -c -f -p -u -x ~/movie_plays/theapartment.html wise" >&2
+	echo -e "\n          In this example an HTML file is processed (-x), finding matches" >&2
+	echo "          in words strictly containing the word part, \"wise\" (-p)." >&2
+	echo "          The matching for \"wise\" is done using case sensitive matching (-c)." >&2
+	echo "          The unique (-u), case folded (-f), matches are" >&2
+	echo "          listed in alphabetical order." >&2
 }
-
 
 ## Check for existence of supporting programs.
 check_exists() {
-  local prgs=($@)
-  local N=$((${#prgs[@]} / 2))
-  local ary=("\n${GREEN}NAME\t-> PATH${NC}")
+	local prgs=($@)
+	local N=$((${#prgs[@]} / 2))
+	local ary=("\n${GREEN}NAME\t-> PATH${NC}")
 
-  ## Need to take care of this program first as it is used below.
-  if [[ (! -e "$CUT") || (! -x "$CUT") ]]; then
-    ary[1]=$(echo "\nCUT -> $CUT")
-    echo "${arg[@]}"
-    return 10
-  fi
+	## Need to take care of this program first as it is used below.
+	if [[ (! -e "$CUT") || (! -x "$CUT") ]]; then
+		ary[1]=$(echo "\nCUT -> $CUT")
+		echo "${arg[@]}"
+		return 10
+	fi
 
-  ## Check for existence/executability of supporting programs.
-  for i in $(eval echo {0..$((N-1))}); do
-    prg=$(echo ${prgs[$i]} | $CUT -d" " -f1 || true)
-    prgn=$(echo ${prgs[$((i + N))]} | $CUT -d" " -f1 || true)
+	## Check for existence/executability of supporting programs.
+	for i in $(eval echo {0..$((N - 1))}); do
+		prg=$(echo ${prgs[$i]} | $CUT -d" " -f1 || true)
+		prgn=$(echo ${prgs[$((i + N))]} | $CUT -d" " -f1 || true)
 
-    ## Check for executability of program, $prg.
-    if [[ (! -e "$prg") || (! -x "$prg") ]]; then
-      ary[$i]="\n$prgn\t-> $prg"
-    fi
-  done
+		## Check for executability of program, $prg.
+		if [[ (! -e "$prg") || (! -x "$prg") ]]; then
+			ary[$i]="\n$prgn\t-> $prg"
+		fi
+	done
 
-  ## Check if there were missing programs, if so return error.
-  if [[ ${#ary[@]} -eq 1 ]]; then
-    ## Return success
-    return 0
-  else
-    echo "${ary[@]}"
-    return 20 
-  fi
+	## Check if there were missing programs, if so return error.
+	if [[ ${#ary[@]} -eq 1 ]]; then
+		## Return success
+		return 0
+	else
+		echo "${ary[@]}"
+		return 20
+	fi
 }
-
 
 ###--------------------------------------------------------------------------------
 ### --------       MAIN PROGRAM        --------------------------------------------
 ###--------------------------------------------------------------------------------
 while getopts ":hcfpuwx" opt; do
-    case $opt in 
-       h) usage "$cmd" >&2
-          exit 1
-          ;;
-       c) CASESENSITIVEFLAG=0 # Match case.
-          ;;
-       f) FOLDFLAG=0 # Fold cases into lower case.
-          ;;
-       p) PARTFLAG=0  # Look for words that contain <wordPart>.
-          if [ $WORDFLAG -eq 0 ]; then
-            echo -e "${YELLOW}WARNING($cmd):${NC} Option -p is incompatible with -w, ignoring -w.\n" >&2
-            WORDFLAG=1  # Incompatible with WORDFLAG -- turn off.
-          fi
-          ;;
-       u) UNIQFLAG=0  # Output unique words.
-          ;;
-       w) WORDFLAG=0  # Look for the exact word, <wordPart>.
-          if [ $PARTFLAG -eq 0 ]; then
-            echo -e "${YELLOW}WARNING($cmd):${NC} Option -w is incompatible with -p, ignoring -p.\n" >&2
-            PARTFLAG=1  # Incompatible with PARTFLAG -- turn off.
-          fi
-          ;;
-       x) HTMLFLAG=0  # Convert input html file to text.
-          ;;
-       :) echo -e "\n${RED}ERROR($cmd):${NC} $OPTARG requires an argument." >&2
-          echo "Aborting, no action taken."                                 >&2
-          exit 2
-          ;;
-      \?) echo -e "\n${RED}ERROR($cmd):${NC} Invalid option: -$OPTARG ."    >&2
-          echo "Aborting, no action taken."                                 >&2
-          exit 3
-          ;;
-    esac
+	case $opt in
+	h)
+		usage "$cmd" >&2
+		exit 1
+		;;
+	c)
+		CASESENSITIVEFLAG=0 # Match case.
+		;;
+	f)
+		FOLDFLAG=0 # Fold cases into lower case.
+		;;
+	p)
+		PARTFLAG=0 # Look for words that contain <wordPart>.
+		if [ $WORDFLAG -eq 0 ]; then
+			echo -e "${YELLOW}WARNING($cmd):${NC} Option -p is incompatible with -w, ignoring -w.\n" >&2
+			WORDFLAG=1 # Incompatible with WORDFLAG -- turn off.
+		fi
+		;;
+	u)
+		UNIQFLAG=0 # Output unique words.
+		;;
+	w)
+		WORDFLAG=0 # Look for the exact word, <wordPart>.
+		if [ $PARTFLAG -eq 0 ]; then
+			echo -e "${YELLOW}WARNING($cmd):${NC} Option -w is incompatible with -p, ignoring -p.\n" >&2
+			PARTFLAG=1 # Incompatible with PARTFLAG -- turn off.
+		fi
+		;;
+	x)
+		HTMLFLAG=0 # Convert input html file to text.
+		;;
+	:)
+		echo -e "\n${RED}ERROR($cmd):${NC} $OPTARG requires an argument." >&2
+		echo "Aborting, no action taken." >&2
+		exit 2
+		;;
+	\?)
+		echo -e "\n${RED}ERROR($cmd):${NC} Invalid option: -$OPTARG ." >&2
+		echo "Aborting, no action taken." >&2
+		exit 3
+		;;
+	esac
 done
 
 ## Reset the argument counter.
@@ -175,22 +183,22 @@ shift $((OPTIND - 1))
 set +e
 missing_prgs=$(check_exists "${programs[@]}" "${program_names[@]}")
 if [ $? -ne 0 ]; then
-  echo -e "\n${RED}ERROR($cmd):${NC} Missing/non-executable supporting programs:$missing_prgs" >&2
-  echo -e "\nAborting, no action taken."                                                       >&2
-  exit 4
+	echo -e "\n${RED}ERROR($cmd):${NC} Missing/non-executable supporting programs:$missing_prgs" >&2
+	echo -e "\nAborting, no action taken." >&2
+	exit 4
 fi
 
 ## Turn 'failure on command' back on.
 set -e
 
 ## Remove tmp file on error or exit.
-trap "$RM -f $tmpFile" EXIT INT QUIT 
+trap "$RM -f $tmpFile" EXIT INT QUIT
 
 ## Check that we have two arguments.
 if [ $# -ne 2 ]; then
-  echo -e "\n${RED}ERROR($cmd):${NC} This script requires two arguments." >&2
-  echo "Aborting, no action taken."                                       >&2
-  exit 5
+	echo -e "\n${RED}ERROR($cmd):${NC} This script requires two arguments." >&2
+	echo "Aborting, no action taken." >&2
+	exit 5
 fi
 
 ## Text/html file to process.
@@ -201,13 +209,13 @@ wordPart="$2"
 
 ## If input file is an HTML file, convert its content to text.
 if [ $HTMLFLAG -eq 0 ]; then
-  if [ ! -f $HTML2TEXT ]; then
-    echo -e "\n${RED}ERROR($cmd):${NC} The program, \"$HTML2TEXT\", which converts HTML to text, does not exist." >&2
-    echo "Aborting, no action taken."                                                                             >&2
-    exit 6
-  fi
-  $HTML2TEXT "$file" > $tmpFile
-  file="$tmpFile"
+	if [ ! -f $HTML2TEXT ]; then
+		echo -e "\n${RED}ERROR($cmd):${NC} The program, \"$HTML2TEXT\", which converts HTML to text, does not exist." >&2
+		echo "Aborting, no action taken." >&2
+		exit 6
+	fi
+	$HTML2TEXT "$file" >$tmpFile
+	file="$tmpFile"
 fi
 
 ## Default: look for the word or words that contain <wordPart>.
@@ -218,40 +226,52 @@ exact_pattern="^$wordPart$"
 
 ## Only Look for words that contain <wordPart>.
 if [ $PARTFLAG -eq 0 ]; then
-   pattern=".*$wordPart.*"
+	pattern=".*$wordPart.*"
 fi
 
 ## Only look for the words, <wordPart>.
 if [ $WORDFLAG -eq 0 ]; then
-   pattern="$exact_pattern"
+	pattern="$exact_pattern"
 fi
 
 ## By default, ignore case, but if flag is true, respect case.
 CASE_SWITCH="-i "
 if [ $CASESENSITIVEFLAG -eq 0 ]; then
-  CASE_SWITCH=" "
+	CASE_SWITCH=" "
 fi
 
 ## By default, there is no case folding, but if flag is true, fold matches to lower case.
 TRANSLATE="$TR 'A' 'A'"
 if [ $FOLDFLAG -eq 0 ]; then
-  TRANSLATE="$TR 'A-Z' 'a-z'"
+	TRANSLATE="$TR 'A-Z' 'a-z'"
 fi
 
 ## Find all words in the text file, <textFile>, that match <pattern>.
 words=$($GREP $CASE_SWITCH "$wordPart" "$file" | $TR ' ,.;?!+="\t[]()<>{}' '\n' | $GREP $CASE_SWITCH "$pattern" || true)
+if [[ "$words" == "" ]]; then
+	echo ""
+	exit 0
+fi
 
 ## Filtering is adjusted to remove exact matches when -p is specified.
 if [ $PARTFLAG -eq 0 ]; then
-  words=$(echo "$words" | $GREP $CASE_SWITCH -v "$exact_pattern" || true)
+	words=$(echo "$words" | $GREP $CASE_SWITCH -v "$exact_pattern" || true)
+fi
+if [[ "$words" == "" ]]; then
+	echo ""
+	exit 0
 fi
 
 ## We use grep -v '^ *$' to remove any blank lines and then get unique matches and sort them.
 words=$(echo "$words" | $TRANSLATE | $SORT | $GREP -v '^ *$' | $UNIQ -c | $SORT -k2,2 | $SORT -rn -k1,1 -s || true)
+if [[ "$words" == "" ]]; then
+	echo ""
+	exit 0
+fi
 
 ## If -u specified, just get the unique words ordered lexically.
 if [ $UNIQFLAG -eq 0 ]; then
-  words=$(echo "$words" | $AWK -F" " '{print($2);}' | $SORT || true)
+	words=$(echo "$words" | $AWK -F" " '{print($2);}' | $SORT || true)
 fi
 
 ## Print the words out.
@@ -259,4 +279,3 @@ echo "$words"
 
 # Exit successfully.
 exit 0
-

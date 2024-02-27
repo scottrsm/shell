@@ -7,7 +7,6 @@
 ####
 #### NOTE         : The script will avoid examining labels that have been commented out.
 
-
 ##---------------  SHELL OPTIONS  ---------------------------------------------------------
 ## Run BASH in "strict mode".
 set -euo pipefail
@@ -24,6 +23,13 @@ NC='\033[0m' # No Color
 BOLD=$(tput bold)
 NORM=$(tput sgr0)
 
+# Commands used.
+AWK=/bin/gawk
+GREP=/bin/egrep
+SED=/bin/sed
+SORT=/bin/sort
+UNIQ=/bin/uniq
+XARGS=/bin/xargs
 
 ## Get the name of this script.
 cmd=$(basename "$0")
@@ -32,79 +38,79 @@ cmd=$(basename "$0")
 DIR="."
 TEX_FILE_PAT="*.tex"
 
-
 ##---------------  FUNCTIONS --------------------------------------------------------------
 ## Usage message
 Usage() {
-  echo -e "${BOLD}${LPURP}DESCRIPTION:${NC} Finds duplicate labels in a latex source tree reporting duplicates"  >&2 
-  echo -e "             along with associated files and line numbers.\n"                                         >&2 
-  echo -e "${BOLD}${LPURP}RATIONALE  :${NC} A LaTeX project spanning a directory tree with multiple authors"     >&2
-  echo    "             makes finding duplicate labels difficult as the LaTeX log file"                          >&2
-  echo -e "             does not indicate which files/lines are responsible."                                    >&2
-  echo -e "${BOLD}${LPURP}\nUSAGE      :${NC} ${RED}$cmd${NC}${NORM} [-h] [-d directory-tree  (default .    )]"  >&2
-  echo -e "                            [-p latex-ext-pat]  (default *.tex)]"                                     >&2
-  echo -e "\n${BOLD}${LPURP}Options    :${NC}"                                                                   >&2
-  echo "             -h -- Help message."                                                                        >&2
-  echo "             -d -- Directory path of LaTeX project."                                                     >&2
-  echo "             -p -- LaTeX glob pattern describing LaTeX file extension used in project."                  >&2
-  echo -e "\n${BOLD}${LPURP}Args       :${NC} NONE"                                                              >&2
-  echo -e "\n${LGREEN}EXAMPLE 1  :${NC} cd ~/proj/latex_proj; $cmd"                                              >&2
-  echo -e "${LGREEN}EXAMPLE 2  :${NC} $cmd -d ~/proj/latex_proj "                                                >&2
-  echo -e "${LGREEN}EXAMPLE 3  :${NC} $cmd -d ~/proj/latex_proj -p *.tex"                                        >&2
-  echo -e "${LGREEN}EXAMPLE 4  :${NC} $cmd -d ~/proj/latex_proj -p *.[lt]*"                                      >&2
+	echo -e "${BOLD}${LPURP}DESCRIPTION:${NC} Finds duplicate labels in a latex source tree reporting duplicates" >&2
+	echo -e "             along with associated files and line numbers.\n" >&2
+	echo -e "${BOLD}${LPURP}RATIONALE  :${NC} A LaTeX project spanning a directory tree with multiple authors" >&2
+	echo "             makes finding duplicate labels difficult as the LaTeX log file" >&2
+	echo -e "             does not indicate which files/lines are responsible." >&2
+	echo -e "${BOLD}${LPURP}\nUSAGE      :${NC} ${RED}$cmd${NC}${NORM} [-h] [-d directory-tree  (default .    )]" >&2
+	echo -e "                            [-p latex-ext-pat]  (default *.tex)]" >&2
+	echo -e "\n${BOLD}${LPURP}Options    :${NC}" >&2
+	echo "             -h -- Help message." >&2
+	echo "             -d -- Directory path of LaTeX project." >&2
+	echo "             -p -- LaTeX glob pattern describing LaTeX file extension used in project." >&2
+	echo -e "\n${BOLD}${LPURP}Args       :${NC} NONE" >&2
+	echo -e "\n${LGREEN}EXAMPLE 1  :${NC} cd ~/proj/latex_proj; $cmd" >&2
+	echo -e "${LGREEN}EXAMPLE 2  :${NC} $cmd -d ~/proj/latex_proj " >&2
+	echo -e "${LGREEN}EXAMPLE 3  :${NC} $cmd -d ~/proj/latex_proj -p *.tex" >&2
+	echo -e "${LGREEN}EXAMPLE 4  :${NC} $cmd -d ~/proj/latex_proj -p *.[lt]*" >&2
 }
-
 
 ##---------------  PROCESS COMMAND LINE OPTIONS -------------------------------------------
 while getopts ":hd:p:" opt; do
-   case $opt in
-      h) # Display help message and exit.
-         Usage 
-         exit 1;;
-      d) # Store directory tree path.
-         DIR=$OPTARG;;
-      p) # Store directory tree path.
-         TEX_FILE_PAT=$OPTARG;;
-      :) # Option exists argument
-         echo -e "${LRED}Error:${NC} Option, \"-$OPTARG\", expected argument.${NC}" 1>&2
-         Usage
-         exit 2;;
-     \?) # Invalid option
-         echo -e "${LRED}Error:${NC} Invalid option, \"-$OPTARG\".${NC}"            1>&2
-         Usage 
-         exit 3;;
-   esac
+	case $opt in
+	h) # Display help message and exit.
+		Usage
+		exit 1
+		;;
+	d) # Store directory tree path.
+		DIR=$OPTARG ;;
+	p) # Store directory tree path.
+		TEX_FILE_PAT=$OPTARG ;;
+	:) # Option exists argument
+		echo -e "${LRED}Error:${NC} Option, \"-$OPTARG\", expected argument.${NC}" 1>&2
+		Usage
+		exit 2
+		;;
+	\?) # Invalid option
+		echo -e "${LRED}Error:${NC} Invalid option, \"-$OPTARG\".${NC}" 1>&2
+		Usage
+		exit 3
+		;;
+	esac
 done
 
 ## Adjust the argument count.
-shift $((OPTIND-1))
+shift $((OPTIND - 1))
 
 ##---------------  ERROR CHECK COMMAND LINE DATA -------------------------------------------
 
 ## Check for arguments -- should be none as we only allow options.
 if [[ $# -gt 0 ]]; then
-  echo -e "${BOLD}${LRED}This script does not take arguments -- only options.\n${NC}${NORM}"          1>&2
-  echo "<<<---- *HELP* ---->>>"                                                                       1>&2
-  Usage
-  echo "<<<---- *HELP* ---->>>"                                                                       1>&2
-  echo -e "\n${LRED}Aborting script, no action taken...${NC}"                                         1>&2
-  exit 4
+	echo -e "${BOLD}${LRED}This script does not take arguments -- only options.\n${NC}${NORM}" 1>&2
+	echo "<<<---- *HELP* ---->>>" 1>&2
+	Usage
+	echo "<<<---- *HELP* ---->>>" 1>&2
+	echo -e "\n${LRED}Aborting script, no action taken...${NC}" 1>&2
+	exit 4
 fi
 
 ## Check that <DIR> is a directory.
 if [[ ! -d "$DIR" ]]; then
-  echo -e "\n${BOLD}${LRED}Path, \"$DIR\", is not a directory.${NC}${NORM}"                           1>&2
-  echo -e "\n${LRED}Aborting script, no action taken...${NC}"                                         1>&2
-  exit 5
+	echo -e "\n${BOLD}${LRED}Path, \"$DIR\", is not a directory.${NC}${NORM}" 1>&2
+	echo -e "\n${LRED}Aborting script, no action taken...${NC}" 1>&2
+	exit 5
 fi
 
 ## Check that <DIR> is a readable and scannable directory.
 if [[ ! ((-x "$DIR") && (-r "$DIR")) ]]; then
-  echo -e "\n${BOLD}${LRED}Path, \"$DIR\", is NOT BOTH readable (-r) and scannable (-x).${NC}${NORM}" 1>&2
-  echo -e "\n${LRED}Aborting script, no action taken...${NC}"                                         1>&2
-  exit 6
+	echo -e "\n${BOLD}${LRED}Path, \"$DIR\", is NOT BOTH readable (-r) and scannable (-x).${NC}${NORM}" 1>&2
+	echo -e "\n${LRED}Aborting script, no action taken...${NC}" 1>&2
+	exit 6
 fi
-
 
 ##---------------  FIND DUPLICATE LABELS  --------------------------------------------------------
 
@@ -114,38 +120,36 @@ set +e
 
 ## Walk over all LaTeX files (matches <TEX_FILE_PAT)> in the directory tree starting at <DIR>.
 ## 1). Find all lines containing latex labels, '\label' -- which have not been commented out.
-## 2). Extract the label names; count the number of times they occur in the project 
+## 2). Extract the label names; count the number of times they occur in the project
 ##     and output these to stdout line by line in the format: count label.
-## 3). Read in this data and report labels that occur more than once; writing them to stdout with 
+## 3). Read in this data and report labels that occur more than once; writing them to stdout with
 ##     label names followed by indented lines containing: file names; line numbers; and lines of match.
 ## NOTE: Even if a file matches <TEX_FILE_PAT> below, it will be ignored if its contents are binary.
 ###      That is, we ignore binary files regardless of what file extension suggests.
 ##
 ## Print "No Duplicate Labels Found" if we did not encounter any duplicates.
 TOKEN="ZX-YZXY-ZXYZXYZ-XYZX-Y"
-\find "$DIR" -name "${TEX_FILE_PAT}" -print0  | \xargs -I{} --null grep -I -v '^.*[^\]%.*\\label{[^}]*}.*$' {}  \
-   | \grep  '\\label{' | \sed 's/^.*\\label{\([^}]*\)}.*$/\1/' | \sort | \uniq -c | \sort -rn  \
-   | \gawk  -F" " '{if ($1 > 1) {print($2);}}'                                                 \
-   | while read -r duplabel; do 
-       echo "Duplicate: $duplabel"; 
-       \find "$DIR" -name "${TEX_FILE_PAT}" -print0                                            \
-       | \xargs -I{} --null grep -n "\\label{$duplabel}" {} /dev/null                                 \
-       | \sed "s/^/\\$TOKEN/" 
-     done                                                                                      \
-   | { read -r fline                                                                      
-        if [[ -z "$fline" ]]; then 
-          echo " " 
-        else  
-          echo $fline 
-          while read -r rline; do 
-            echo "$rline" | \sed "s/^$TOKEN/   /"
-          done 
-        fi 
-     }                                                                                         \
-   | \sed 's/^[ ]*$/No Duplicate Labels Found./' 
+\find "$DIR" -name "${TEX_FILE_PAT}" -print0 | \xargs -I{} --null $GREP -I -v '^.*[^\]%.*\\label{[^}]*}.*$' {} |
+	$GREP '\\label{' | $SED 's/^.*\\label{\([^}]*\)}.*$/\1/' | $SORT | $UNIQ -c | $SORT -rn |
+	$AWK -F" " '{if ($1 > 1) {print($2);}}' |
+	while read -r duplabel; do
+		echo "Duplicate: $duplabel"
+		\find "$DIR" -name "${TEX_FILE_PAT}" -print0 |
+			$XARGS -I{} --null grep -n "\\label{$duplabel}" {} /dev/null |
+			$SED "s/^/\\$TOKEN/"
+	done |
+	{
+		read -r fline
+		if [[ -z "$fline" ]]; then
+			echo " "
+		else
+			echo $fline
+			while read -r rline; do
+				echo "$rline" | $SED "s/^$TOKEN/   /"
+			done
+		fi
+	} |
+	$SED 's/^[ ]*$/No Duplicate Labels Found./'
 
 ## Exit successfully
 exit 0
-
-
-

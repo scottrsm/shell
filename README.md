@@ -127,5 +127,5 @@
 **EXAMPLE 4  :** find_dup_label -d ~/proj/latex_proj -p *.[lt]*
 
 ## Version
-1.0.4
+1.0.5
 
