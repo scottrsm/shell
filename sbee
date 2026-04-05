@@ -70,7 +70,7 @@ set -euo pipefail
 AWK=gawk
 BASENAME=basename
 CUT=cut
-GREP="grep -E"
+GREP=egrep
 SED=sed
 SORT=sort
 TR=tr

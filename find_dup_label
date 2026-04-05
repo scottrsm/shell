@@ -25,7 +25,7 @@ NORM=$(tput sgr0)
 
 # Commands used.
 AWK=gawk
-GREP="grep -E"
+GREP=egrep
 SED=sed
 SORT=sort
 UNIQ=uniq
