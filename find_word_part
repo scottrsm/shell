@@ -1,4 +1,4 @@
-#!/bin/env bash
+#!/usr/bin/env bash
 
 #### AUTHOR       : Roland Scott McIntire
 #### DATE         : Dec 20, 2022
@@ -28,21 +28,21 @@ YELLOW='\033[0;33m'  # YELLOW
 MAGENTA='\033[0;35m' # MAGENTA
 NC='\033[0m'         # NORMAL COLOR
 
-## Path of standard Linux commands.
-AWK="/bin/gawk"
-BASENAME="/bin/basename"
-CUT="/bin/cut"
-GREP="/bin/egrep -E"
-GREPCHK="/bin/egrep"
-RM="/bin/rm"
-SORT="/bin/sort"
-TR="/bin/tr"
-UNIQ="/bin/uniq"
+## Standard Linux commands.
+AWK=gawk
+BASENAME=basename
+CUT=cut
+GREP="grep -E"
+GREPCHK=grep
+RM=rm
+SORT=sort
+TR=tr
+UNIQ=uniq
 
 ## Non-standard command, needed when using the -x option which
 ## scraps a html file, placing contents into a temporary text file
 ## for further processing.
-HTML2TEXT="/bin/html2text"
+HTML2TEXT=html2text
 
 ## Get this script name without its path.
 cmd=$($BASENAME "$0")
@@ -52,7 +52,8 @@ program_names=("AWK" "BASENAME" "CUT" "GREP" "RM" "SORT" "TR" "UNIQ")
 programs=("$AWK" "$BASENAME" "$CUT" "$GREPCHK" "$RM" "$SORT" "$TR" "$UNIQ")
 
 ## Temp file. Used with the -x option to create a text from an HTML file.
-tmpFile="${cmd}_tmp.$$"
+tmpFile=$(mktemp "${TMPDIR:-/tmp}/${cmd}_tmp.XXXXXX")
+trap 'rm -f "$tmpFile"' EXIT INT QUIT
 
 ## By default, we don't want any of the options set: -c, -f, -p, -u, -w, -x.
 CASESENSITIVEFLAG=1
@@ -100,9 +101,9 @@ check_exists() {
 	local ary=("\n${GREEN}NAME\t-> PATH${NC}")
 
 	## Need to take care of this program first as it is used below.
-	if [[ (! -e "$CUT") || (! -x "$CUT") ]]; then
-		ary[1]=$(echo "\nCUT -> $CUT")
-		echo "${arg[@]}"
+	if ! command -v "$CUT" &>/dev/null; then
+		ary[1]="\nCUT -> $CUT"
+		echo "${ary[@]}"
 		return 10
 	fi
 
@@ -112,7 +113,7 @@ check_exists() {
 		prgn=$(echo ${prgs[$((i + N))]} | $CUT -d" " -f1 || true)
 
 		## Check for executability of program, $prg.
-		if [[ (! -e "$prg") || (! -x "$prg") ]]; then
+		if ! command -v "$prg" &>/dev/null; then
 			ary[$i]="\n$prgn\t-> $prg"
 		fi
 	done
@@ -134,7 +135,7 @@ while getopts ":hcfpuwx" opt; do
 	case $opt in
 	h)
 		usage "$cmd" >&2
-		exit 1
+		exit 0
 		;;
 	c)
 		CASESENSITIVEFLAG=0 # Match case.
@@ -191,9 +192,6 @@ fi
 ## Turn 'failure on command' back on.
 set -e
 
-## Remove tmp file on error or exit.
-trap "$RM -f $tmpFile" EXIT INT QUIT
-
 ## Check that we have two arguments.
 if [ $# -ne 2 ]; then
 	echo -e "\n${RED}ERROR($cmd):${NC} This script requires two arguments." >&2
@@ -209,12 +207,12 @@ wordPart="$2"
 
 ## If input file is an HTML file, convert its content to text.
 if [ $HTMLFLAG -eq 0 ]; then
-	if [ ! -f $HTML2TEXT ]; then
+	if ! command -v "$HTML2TEXT" &>/dev/null; then
 		echo -e "\n${RED}ERROR($cmd):${NC} The program, \"$HTML2TEXT\", which converts HTML to text, does not exist." >&2
 		echo "Aborting, no action taken." >&2
 		exit 6
 	fi
-	$HTML2TEXT "$file" >$tmpFile
+	$HTML2TEXT "$file" >"$tmpFile"
 	file="$tmpFile"
 fi
 
@@ -235,9 +233,9 @@ if [ $WORDFLAG -eq 0 ]; then
 fi
 
 ## By default, ignore case, but if flag is true, respect case.
-CASE_SWITCH="-i "
+CASE_SWITCH="-i"
 if [ $CASESENSITIVEFLAG -eq 0 ]; then
-	CASE_SWITCH=" "
+	CASE_SWITCH=""
 fi
 
 ## By default, there is no case folding, but if flag is true, fold matches to lower case.
@@ -247,7 +245,7 @@ if [ $FOLDFLAG -eq 0 ]; then
 fi
 
 ## Find all words in the text file, <textFile>, that match <pattern>.
-words=$($GREP $CASE_SWITCH "$wordPart" "$file" | $TR ' ,.;?!+="\t[]()<>{}' '\n' | $GREP $CASE_SWITCH "$pattern" || true)
+words=$($GREP $CASE_SWITCH "$wordPart" "$file" | $TR $' ,.;?!+="\t[]()<>{}' '\n' | $GREP $CASE_SWITCH "$pattern" || true)
 if [[ "$words" == "" ]]; then
 	echo ""
 	exit 0

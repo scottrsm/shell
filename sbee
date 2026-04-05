@@ -1,4 +1,4 @@
-#!/bin/env bash
+#!/usr/bin/env bash
 
 
 # AUTHOR       : Roland Scott McIntire
@@ -66,15 +66,15 @@ set -euo pipefail
 # ------         SHELL CMD PATHS, COLORS, and GAME PARAMETERS      --------------
 #--------------------------------------------------------------------------------
 
-# Full paths to: awk, basename, cut, egrep, sed, sort, tr, and uniq.
-AWK=/bin/gawk
-BASENAME=/bin/basename
-CUT=/bin/cut
-GREP=/bin/egrep
-SED=/bin/sed
-SORT=/bin/sort
-TR=/bin/tr
-UNIQ=/bin/uniq
+# Standard commands.
+AWK=gawk
+BASENAME=basename
+CUT=cut
+GREP="grep -E"
+SED=sed
+SORT=sort
+TR=tr
+UNIQ=uniq
 
 # Standard program names and their full paths.
 program_names=( "AWK"  "BASENAME"   "CUT"  "GREP"  "SED"  "SORT"  "TR"  "UNIQ"  )
@@ -97,16 +97,13 @@ VERBOSE=1 # Not verbose by default
 # Game parameters (alphabet size, minimum word length allowed in all games <GAME_MIN_WORD_LENGTH>,
 # and minimum word length for this game, <MIN_WORD_LENGTH>.
 MIN_WORD_LENGTH=4         # May be overridden (option -m) -- word length minimum for THIS game.
-GAME_MIN_WORD_LENGTH_=2   # May NOT be overridden         -- word length minimum for ANY  game.0
+GAME_MIN_WORD_LENGTH_=2   # May NOT be overridden         -- word length minimum for ANY  game.
 ENGLISH_TYPE="american"
 
 # Get this script name without its path.
-if [ ! -e $BASENAME ]; then
-  echo "The program \"$BASENAME\" does not exist." 1>&2
+if ! command -v "$BASENAME" &>/dev/null; then
+  echo "The program \"$BASENAME\" does not exist or is not executable." 1>&2
   exit 1
-elif [ ! -x $BASENAME ]; then
-  echo "The program \"$BASENAME\" is not executable by this user." 1>&2
-  exit 2 
 fi
 
 # Get the name of this script.
@@ -159,8 +156,8 @@ check_exists() {
   local ary=("\n${GREEN}NAME\t-> PATH${NC}")
 
   # Need to take care of this program first as it is used below.
-  if [[ (! -e "$CUT") || (! -x "$CUT") ]]; then
-    ary[1]=$(echo "\nCUT -> $CUT")
+  if ! command -v "$CUT" &>/dev/null; then
+    ary[1]="\nCUT -> $CUT"
     echo "${ary[@]}"
     return 10
   fi
@@ -171,7 +168,7 @@ check_exists() {
     prgn=$(echo ${prgs[$((i + N))]} | $CUT -d" " -f1 || true)
 
     # Check for executability of program, $prg.
-    if [[ (! -e "$prg") || (! -x "$prg") ]]; then
+    if ! command -v "$prg" &>/dev/null; then
       ary[$i]="\n$prgn\t-> $prg"
     fi
   done
@@ -284,7 +281,7 @@ while getopts ":bhvm:" opt; do
         b) ENGLISH_TYPE="british"
            ;;
         h) Usage
-           exit 3
+           exit 0
            ;;
         m) MIN_WORD_LENGTH="$OPTARG"
            ;;
@@ -340,8 +337,7 @@ INNER=$(echo -e "$2" | $SED -r 's/[[:space:]]+//g' || true)
 #--------------------------------------------------------------------------------
 
 # Check that the minimum word length is a number.
-MIN_WORD_LENGTHCHK=$((${MIN_WORD_LENGTH} + 0))
-if [ ${MIN_WORD_LENGTHCHK} -eq 0 ]; then
+if ! [[ "${MIN_WORD_LENGTH}" =~ ^[0-9]+$ ]]; then
    echo -e "${RED}ERROR:${NC} Minimum word length value, \"${MIN_WORD_LENGTH}\", is not a number." >&2
    echo -e "${RED}Aborting, no action taken.${NC}"                                                 >&2
    exit 7
@@ -354,18 +350,9 @@ if [ ${MIN_WORD_LENGTH} -lt ${GAME_MIN_WORD_LENGTH_} ]; then
 fi
 
 
-# Check for the right number of arguments -- should be two: the allowable string and a must-use string.
-if [ $# -ne 2 ]; then
-   echo -e "${RED}ERROR:${NC} Wrong number of arguments.\n"     >&2
-   Usage
-   echo -e "\n${RED}Aborting, no action taken.${NC}"            >&2
-   exit 8
-fi
-
-
 # The outer letters (allowable) to choose from -- in lower case (to avoid proper nouns),
 # ranges exploded, and the resulting exploded string rendered to produce a string of unique characters.
-OUTER=$(uniqify $(explodeString $(toLower "$OUTER")))
+OUTER=$(uniqify "$(explodeString "$(toLower "$OUTER")")") 
 
 # Remove any non-letter characters.
 OUTER=$(echo "$OUTER" | $SED 's/[^a-z]//g' || true)
@@ -378,7 +365,7 @@ fi
 
 # The inner (must-use) string to use -- in lower case (to avoid proper nouns),
 # ranges exploded, and the resulting exploded string rendered to produce a string of unique characters.
-INNER=$(uniqify $(explodeString $(toLower "$INNER")))
+INNER=$(uniqify "$(explodeString "$(toLower "$INNER")")") 
 
 # Remove any non-letter characters.
 INNER=$(echo "$INNER" | $SED 's/[^a-z]//g' || true)
@@ -412,7 +399,7 @@ fi
 
 # Search the dictionary to find all words (of length at least MIN_WORD_LENGTH)
 # formed using (only) letters from the string ALPHABET.
-words=$($GREP "^[$ALPHABET]{$MIN_WORD_LENGTH,}$" ${DICTIONARY_LOC}${DICTIONARY_LANGUAGE} || true)
+words=$($GREP "^[$ALPHABET]{$MIN_WORD_LENGTH,}$" "${DICTIONARY_LOC}${DICTIONARY_LANGUAGE}" || true)
 
 # Then of these words, find all that contain at least one instance of each of the must-use letters.
 for el in $(echo "$INNER" | $SED -r 's/./&\n/g' || true); do
@@ -427,7 +414,7 @@ done
 all_chars=$(echo "${OUTER}${INNER}" | $SED  's/\(.\)/\1 /g' || true)
 swords=$words
 for x in $all_chars; do
-  swords=$(echo $swords | $TR ' ' '\n' | $GREP $x || true)
+  swords=$(echo "$swords" | $TR ' ' '\n' | $GREP "$x" || true)
 done
 
 #-----------------------------------------------------------------------------

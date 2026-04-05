@@ -1,4 +1,4 @@
-#!/bin/env bash
+#!/usr/bin/env bash
 
 #### AUTHOR       : Roland Scott McIntire
 #### DATE         : Dec 2022
@@ -24,12 +24,12 @@ BOLD=$(tput bold)
 NORM=$(tput sgr0)
 
 # Commands used.
-AWK=/bin/gawk
-GREP=/bin/egrep
-SED=/bin/sed
-SORT=/bin/sort
-UNIQ=/bin/uniq
-XARGS=/bin/xargs
+AWK=gawk
+GREP="grep -E"
+SED=sed
+SORT=sort
+UNIQ=uniq
+XARGS=xargs
 
 ## Get the name of this script.
 cmd=$(basename "$0")
@@ -64,7 +64,7 @@ while getopts ":hd:p:" opt; do
 	case $opt in
 	h) # Display help message and exit.
 		Usage
-		exit 1
+		exit 0
 		;;
 	d) # Store directory tree path.
 		DIR=$OPTARG ;;
@@ -118,24 +118,22 @@ fi
 ## The command, grep, fails when it finds nothing.
 set +e
 
-## Walk over all LaTeX files (matches <TEX_FILE_PAT)> in the directory tree starting at <DIR>.
-## 1). Find all lines containing latex labels, '\label' -- which have not been commented out.
-## 2). Extract the label names; count the number of times they occur in the project
-##     and output these to stdout line by line in the format: count label.
-## 3). Read in this data and report labels that occur more than once; writing them to stdout with
-##     label names followed by indented lines containing: file names; line numbers; and lines of match.
+## Walk over all LaTeX files (matches <TEX_FILE_PAT>) in the directory tree starting at <DIR>.
+## 1). Find all lines containing '\label', strip LaTeX comments, then extract all label names.
+## 2). Count the number of times each label occurs in the project.
+## 3). Report labels that occur more than once along with associated file names and line numbers.
 ## NOTE: Even if a file matches <TEX_FILE_PAT> below, it will be ignored if its contents are binary.
-###      That is, we ignore binary files regardless of what file extension suggests.
 ##
 ## Print "No Duplicate Labels Found" if we did not encounter any duplicates.
 TOKEN="ZX-YZXY-ZXYZXYZ-XYZX-Y"
-\find "$DIR" -name "${TEX_FILE_PAT}" -print0 | \xargs -I{} --null $GREP -I -v '^.*[^\]%.*\\label{[^}]*}.*$' {} |
-	$GREP '\\label{' | $SED 's/^.*\\label{\([^}]*\)}.*$/\1/' | $SORT | $UNIQ -c | $SORT -rn |
+find "$DIR" -name "${TEX_FILE_PAT}" -print0 | xargs -0 $GREP -I -h '\\label\{' /dev/null |
+	$SED 's/\([^\\]\)%.*/\1/; s/^%.*//' | $GREP '\\label\{' |
+	grep -o '\\label{[^}]*}' | $SED 's/\\label{//; s/}//' | $SORT | $UNIQ -c | $SORT -rn |
 	$AWK -F" " '{if ($1 > 1) {print($2);}}' |
 	while read -r duplabel; do
 		echo "Duplicate: $duplabel"
-		\find "$DIR" -name "${TEX_FILE_PAT}" -print0 |
-			$XARGS -I{} --null grep -n "\\label{$duplabel}" {} /dev/null |
+		find "$DIR" -name "${TEX_FILE_PAT}" -print0 |
+			$XARGS -0 -I{} grep -n "\\label{$duplabel}" {} /dev/null |
 			$SED "s/^/\\$TOKEN/"
 	done |
 	{
@@ -143,7 +141,7 @@ TOKEN="ZX-YZXY-ZXYZXYZ-XYZX-Y"
 		if [[ -z "$fline" ]]; then
 			echo " "
 		else
-			echo $fline
+			echo "$fline"
 			while read -r rline; do
 				echo "$rline" | $SED "s/^$TOKEN/   /"
 			done
