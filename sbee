@@ -35,7 +35,7 @@
 #                  set of letters: a,b,c,d.
 #                - Case does not matter as all letters are lower cased.
 #                - Non-letter characters input by the user will be removed.
-#                - Each of "MAY-USE" and "MUST-USER" lists are rendered to lists of unique characters before final processing.
+#                - Each of "MAY-USE" and "MUST-USE" lists are rendered to lists of unique characters before final processing.
 #                - If either of the "MAY-USE" or "MUST-USE" lists are empty after the list processing
 #                  processing stops and an error message is emitted.
 #
@@ -66,19 +66,13 @@ set -euo pipefail
 # ------         SHELL CMD PATHS, COLORS, and GAME PARAMETERS      --------------
 #--------------------------------------------------------------------------------
 
-# Standard commands.
-AWK=gawk
-BASENAME=basename
-CUT=cut
-GREP=egrep
-SED=sed
-SORT=sort
-TR=tr
-UNIQ=uniq
+# Standard commands. (GREP is used as "grep -E"; egrep is deprecated by GNU grep.)
+AWK="gawk"
+GREP="grep"
 
 # Standard program names and their full paths.
-program_names=( "AWK"  "BASENAME"   "CUT"  "GREP"  "SED"  "SORT"  "TR"  "UNIQ"  )
-programs=(      "$AWK" "$BASENAME" "$CUT" "$GREP"  "$SED" "$SORT" "$TR" "$UNIQ" )
+program_names=( "AWK"  "GREP"  )
+programs=(      "$AWK" "$GREP" )
 
 # Colors: Used to turn on and off ANSI text coloring for the terminal.
 RED='\033[0;31m'    # RED
@@ -90,24 +84,20 @@ NC='\033[0m'        # NORMAL COLOR
 #                     These words are not stemmed and include proper nouns; however, our solutions
 #                     will not use any of these proper nouns. As proper nouns have capital letters
 #                     we will lower case all user supplied letters.
-DICTIONARY_LOC=/usr/share/dict/
-PROGNAME=${BLUE}${0#*/}${NC}
+#                     The directory may be overridden with the environment variable SBEE_DICT_DIR
+#                     (used by the tests).
+DICTIONARY_LOC=${SBEE_DICT_DIR:-/usr/share/dict}/
 VERBOSE=1 # Not verbose by default
 
 # Game parameters (alphabet size, minimum word length allowed in all games <GAME_MIN_WORD_LENGTH>,
 # and minimum word length for this game, <MIN_WORD_LENGTH>.
 MIN_WORD_LENGTH=4         # May be overridden (option -m) -- word length minimum for THIS game.
-GAME_MIN_WORD_LENGTH_=2   # May NOT be overridden         -- word length minimum for ANY  game.
+GAME_MIN_WORD_LENGTH=2    # May NOT be overridden         -- word length minimum for ANY  game.
 ENGLISH_TYPE="american"
 
-# Get this script name without its path.
-if ! command -v "$BASENAME" &>/dev/null; then
-  echo "The program \"$BASENAME\" does not exist or is not executable." 1>&2
-  exit 1
-fi
-
-# Get the name of this script.
-cmd=$($BASENAME "$0")
+# Get the name of this script (without its path).
+cmd=${0##*/}
+PROGNAME=${BLUE}${cmd}${NC}
 
 
 #--------------------------------------------------------------------------------
@@ -150,125 +140,114 @@ Usage() {
 }
 
 # Check for existence of supporting programs.
+# Arguments: the program paths followed by the same number of program names.
+# Prints the missing programs (NAME -> PATH) and returns non-zero if any are missing.
 check_exists() {
-  local prgs=($@)
+  local prgs=("$@")
   local N=$((${#prgs[@]} / 2))
-  local ary=("\n${GREEN}NAME\t-> PATH${NC}")
-
-  # Need to take care of this program first as it is used below.
-  if ! command -v "$CUT" &>/dev/null; then
-    ary[1]="\nCUT -> $CUT"
-    echo "${ary[@]}"
-    return 10
-  fi
+  local missing=()
+  local i prg prgn
 
   # Check for existence/executability of supporting programs.
-  for i in $(eval echo {0..$((N-1))}); do
-    prg=$(echo ${prgs[$i]} | $CUT -d" " -f1 || true)
-    prgn=$(echo ${prgs[$((i + N))]} | $CUT -d" " -f1 || true)
+  for ((i = 0; i < N; i++)); do
+    prg=${prgs[i]%% *}
+    prgn=${prgs[i + N]%% *}
 
     # Check for executability of program, $prg.
     if ! command -v "$prg" &>/dev/null; then
-      ary[$i]="\n$prgn\t-> $prg"
+      missing+=("$prgn -> $prg")
     fi
   done
 
   # Check if there were missing programs, if so return error.
-  if [[ ${#ary[@]} -eq 1 ]]; then
-    # Return success
+  if [[ ${#missing[@]} -eq 0 ]]; then
     return 0
-  else
-    echo "${ary[@]}"
-    return 20 
   fi
+  printf '\n%bNAME -> PATH%b' "$GREEN" "$NC"
+  printf '\n%s' "${missing[@]}"
+  printf '\n'
+  return 20
 }
 
 
-# Score the list of words using the generalization of the NYT method described above.
+# Score the list of words (one per line) using the generalization of the NYT method described above.
 score_words() {
-  words="$1"
-
-  scores=$(echo -e "$words" | $TR ' ' '\n' | while read -r str; do
+  local str x
+  while read -r str; do
+      [[ -z "$str" ]] && continue
       x=${#str}
-      if [ "$x" -lt "$MIN_WORD_LENGTH" ]; then
-        echo 0;
-      elif [ "$x" -eq "$MIN_WORD_LENGTH" ]; then
-        echo 1;
+      if (( x < MIN_WORD_LENGTH )); then
+        echo 0
+      elif (( x == MIN_WORD_LENGTH )); then
+        echo 1
       else
-        echo "$x";
+        echo "$x"
       fi 
-   done)
-
-  echo "$scores"
+  done <<< "$1"
 }
 
-# Get the sum of a list of scores.
+# Get the sum of a list of scores (one per line).
 sum_scores() {
-  scores="$1"
-
-  sum=$(echo $scores | $TR ' ' '\n' | $AWK -F" " '{x += $1;}END{print x;}')
-  echo "$sum"
+  $AWK '{x += $1;} END{print x + 0;}' <<< "$1"
 }
 
 # Convert string to lower case.
 toLower() {
-    echo "$1" | $TR [:upper:] [:lower:]
+    printf '%s\n' "${1,,}"
 }
 
+# Expand the character range <a>..<b> (in either direction) to a string of consecutive characters.
+# Arguments must be single characters; no text is evaluated.
+expandRange() {
+    local a=$1 b=$2 ca cb step i
+    printf -v ca '%d' "'$a"
+    printf -v cb '%d' "'$b"
+    step=1
+    (( ca > cb )) && step=-1
+    for ((i = ca; i != cb + step; i += step)); do
+        printf "\\$(printf '%03o' "$i")"
+    done
+    printf '\n'
+}
 
 # Explode (potentially embedded) character ranges. Character ranges like "[a-e]" are expanded to "abcde".
 explodeString() {
-
-    # Replace all occurrences of [<x>-<y>] with {<x>..<y>}.
-    # The latter syntax is a BASH range syntax which can be evaluated to produce
-    # a sequential list of characters.
-    # The conversion results in a space separated list of strings of the
-    # form: {<x1>..<y1>} {<x1>..<y1>} ... <character string>
-    str=$(echo "$1" | $SED -re 's/\[(.)-(.)\]/ {\1..\2} /g')
-    nstr=""
-
-    # Walk over the (BASH) range descriptions along with remaining characters
-    # expanding out the ranges and concatenating all expanded (and ordinary) strings together.
-    for x in $str; do
-        # If $x is a range, expand it and append to <nstr>; otherwise, $x is
-        # a regular string -- so append to <nstr>.
-        if [[ $x =~ \{.\.\..\} ]]; then  # Explode range to a string and append to nstr.
-            lst=$(for i in $(eval echo "$x"); do
-                      echo $i
-                  done)
-            # Remove the spaces in the list, $lst, and append to <nstr>.
-            nstr=${nstr}${lst}
-        else # Append ordinary string to <nstr>.
-            nstr=${nstr}$x
-        fi
+    local str=$1 out="" prefix range
+    # Replace every occurrence of [<x>-<y>] (<x>, <y> single letters) with the expanded range.
+    while [[ $str =~ \[([a-zA-Z])-([a-zA-Z])\] ]]; do
+        range=${BASH_REMATCH[0]}
+        prefix=${str%%"$range"*}
+        out+=${prefix}$(expandRange "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}")
+        str=${str#*"$range"}
     done
+    out+=$str
 
-    # Return the final list of characters -- there may be duplicate characters.
-    echo $(echo $nstr | $SED -r 's/ +//g')
+    # Return the final list of characters (white space removed) -- there may be duplicate characters.
+    printf '%s\n' "${out//[[:space:]]/}"
 }
 
 
-# Checks to see if a string has unique letters.
-isUnique() {
-    origLen=${#1}
+# Takes a string and returns a string consisting of the unique characters, in sorted order.
+uniqify() {
+    local s=$1 out="" c i
+    for ((i = 0; i < ${#s}; i++)); do
+        c=${s:i:1}
+        [[ $out == *"$c"* ]] || out+=$c
+    done
+    # Sort the characters.
+    printf '%s\n' "$out" | $GREP -o . | sort | tr -d '\n'
+    printf '\n'
+}
 
-    nlst=$(echo -n "$1" | $SED -r 's/./&\n/g' | $SORT | $UNIQ)
-    nlst=$(echo "$nlst" | $SED -r 's/ //g')
-    len=${#nlst}
-    if [ "$len" -eq "$origLen" ]; then   
+# Checks to see if a string has unique letters: prints 0 if unique, 1 otherwise.
+isUnique() {
+    local u
+    u=$(uniqify "$1")
+    if [[ ${#u} -eq ${#1} ]]; then
         echo 0                      # Unique
     else
         echo 1                      # Not Unique
     fi
-}
-
-
-# Takes a string and returns a string consisting of the unique string entries.
-uniqify() {
-    origLen=${#1}
-    nlst=$(echo -n "$1" | $SED -r 's/./&\n/g' | $SORT | $UNIQ)
-    nlst=$(echo "$nlst" | $SED -r 's/ //g')
-    echo $nlst
 }
 
 
@@ -311,25 +290,25 @@ if [[ $# -ne 2 ]]; then
 fi
 
 # Check that the supporting programs used in this script exist.
-# Turn 'failure on command' off.
-set +e
-
-# Check that the supporting programs used in this script exist.
-missing_prgs=$(check_exists "${programs[@]}" "${program_names[@]}")
-if [ $? -ne 0 ]; then
+if ! missing_prgs=$(check_exists "${programs[@]}" "${program_names[@]}"); then
   echo -e "\n${RED}ERROR($cmd):${NC} Missing/non-executable supporting programs:$missing_prgs" >&2
   echo -e "\nAborting, no action taken."                                                       >&2
   exit 6
 fi
 
-# Turn 'failure on command' back on.
-set -e
-
 # Expecting two arguments, the OUTER ("May Only Use") letters
 # and the INNER ("Must Use") letters.
 # Remove any embedded spaces before assigning them from the command line.
-OUTER=$(echo -e "$1" | $SED -r 's/[[:space:]]+//g' || true)
-INNER=$(echo -e "$2" | $SED -r 's/[[:space:]]+//g' || true)
+OUTER=${1//[[:space:]]/}
+INNER=${2//[[:space:]]/}
+
+# Check that the dictionary exists and is readable.
+DICTIONARY="${DICTIONARY_LOC}${DICTIONARY_LANGUAGE}"
+if [[ ! -r "$DICTIONARY" ]]; then
+   echo -e "\n${RED}ERROR($cmd):${NC} The dictionary file, \"$DICTIONARY\", does not exist or is not readable." >&2
+   echo -e "\nAborting, no action taken."                                                                        >&2
+   exit 8
+fi
 
 
 #--------------------------------------------------------------------------------
@@ -344,9 +323,9 @@ if ! [[ "${MIN_WORD_LENGTH}" =~ ^[0-9]+$ ]]; then
 fi
 
 # Minimum word length for this game can't be less than the game minimum.
-if [ ${MIN_WORD_LENGTH} -lt ${GAME_MIN_WORD_LENGTH_} ]; then
-   echo -e "${GREEN}WARNING:${NC} User minimum word length setting of, \"${MIN_WORD_LENGTH}\", will be overridden\n\t\tby game minimum, \"$GAME_MIN_WORD_LENGTH_\"." >&2
-   MIN_WORD_LENGTH=${GAME_MIN_WORD_LENGTH_}
+if [ ${MIN_WORD_LENGTH} -lt ${GAME_MIN_WORD_LENGTH} ]; then
+   echo -e "${GREEN}WARNING:${NC} User minimum word length setting of, \"${MIN_WORD_LENGTH}\", will be overridden\n\t\tby game minimum, \"$GAME_MIN_WORD_LENGTH\"." >&2
+   MIN_WORD_LENGTH=${GAME_MIN_WORD_LENGTH}
 fi
 
 
@@ -355,11 +334,11 @@ fi
 OUTER=$(uniqify "$(explodeString "$(toLower "$OUTER")")") 
 
 # Remove any non-letter characters.
-OUTER=$(echo "$OUTER" | $SED 's/[^a-z]//g' || true)
+OUTER=${OUTER//[^a-z]/}
 
 # Make sure that OUTER is non-empty.
 if [ -z "${OUTER}" ]; then
-  echo -e "\n${RED}ERROR($cmd):${NC}The \"MAY-USE\" list, resulting from expansion processing is empty." 
+  echo -e "\n${RED}ERROR($cmd):${NC} The \"MAY-USE\" list, resulting from expansion processing is empty." >&2
   exit 9
 fi
 
@@ -368,11 +347,11 @@ fi
 INNER=$(uniqify "$(explodeString "$(toLower "$INNER")")") 
 
 # Remove any non-letter characters.
-INNER=$(echo "$INNER" | $SED 's/[^a-z]//g' || true)
+INNER=${INNER//[^a-z]/}
 
 # Make sure that INNER is non-empty.
 if [ -z "${INNER}" ]; then
-  echo -e "\n${RED}ERROR($cmd):${NC}The \"MUST-USE\" list, resulting from expansion processing is empty." 
+  echo -e "\n${RED}ERROR($cmd):${NC} The \"MUST-USE\" list, resulting from expansion processing is empty." >&2
   exit 10
 fi
 
@@ -381,7 +360,7 @@ ALPHABET="${OUTER}${INNER}"
 
 
 # Check that the letters in our alphabet occur uniquely; if not, uniqify them.
-if [[ 1 -eq $(isUnique $ALPHABET) ]]; then
+if [[ 1 -eq $(isUnique "$ALPHABET") ]]; then
    ALPHABET=$(uniqify "$ALPHABET")
 fi
 
@@ -399,11 +378,12 @@ fi
 
 # Search the dictionary to find all words (of length at least MIN_WORD_LENGTH)
 # formed using (only) letters from the string ALPHABET.
-words=$($GREP "^[$ALPHABET]{$MIN_WORD_LENGTH,}$" "${DICTIONARY_LOC}${DICTIONARY_LANGUAGE}" || true)
+words=$($GREP -E "^[$ALPHABET]{$MIN_WORD_LENGTH,}$" "$DICTIONARY" || true)
 
 # Then of these words, find all that contain at least one instance of each of the must-use letters.
-for el in $(echo "$INNER" | $SED -r 's/./&\n/g' || true); do
-    words=$(echo "$words" | $GREP "$el" || true)
+for ((i = 0; i < ${#INNER}; i++)); do
+    el=${INNER:i:1}
+    words=$($GREP -F -- "$el" <<< "$words" || true)
     if [ -z "$words" ]; then
         echo -e "${RED}No words found.${NC}" >&2
         exit 0
@@ -411,10 +391,10 @@ for el in $(echo "$INNER" | $SED -r 's/./&\n/g' || true); do
 done
 
 # Find the special word(s) which match every  <INNER> and <OUTER> characters.
-all_chars=$(echo "${OUTER}${INNER}" | $SED  's/\(.\)/\1 /g' || true)
+all_chars="${OUTER}${INNER}"
 swords=$words
-for x in $all_chars; do
-  swords=$(echo "$swords" | $TR ' ' '\n' | $GREP "$x" || true)
+for ((i = 0; i < ${#all_chars}; i++)); do
+  swords=$($GREP -F -- "${all_chars:i:1}" <<< "$swords" || true)
 done
 
 #-----------------------------------------------------------------------------
@@ -424,14 +404,14 @@ done
 # Compute the special score that results from these words.
 special_score=0
 if [ -n "$swords" ]; then
-  for x in $swords; do
-    special_score=$((special_score + 7))
-  done
+  while read -r x; do
+    [[ -n "$x" ]] && special_score=$((special_score + 7))
+  done <<< "$swords"
 fi
 
 
-echo -e "Special Word(s):\n"
-echo -e "$swords" | $TR ' ' '\n'
+printf 'Special Word(s):\n\n'
+printf '%s\n' "$swords"
 
 # Compute the addition score that these special words will contribute to the overall score.
 echo -e "\nSpecial Score = $special_score\n"
@@ -444,8 +424,8 @@ scores=$(score_words "$words")
 max_regular_score=$(sum_scores "$scores")
 
 # Print the list of possible words.
-echo -e "\nAll Words:\n"
-echo -e "$words" | $TR ' ' '\n'
+printf '\nAll Words:\n\n'
+printf '%s\n' "$words"
 
 # Print the maximum possible score: The regular score + the special score.
 echo -e "\nMaximum Possible Score = $((max_regular_score + special_score))"

@@ -2,15 +2,16 @@
 
 #### AUTHOR       : Roland Scott McIntire
 #### DATE         : Dec 20, 2022
-#### LAST MODIFIED: Dec 31, 2023
+#### LAST MODIFIED: Sep 6, 2025
 #### DESCRIPTION  : Find all words in a text file that contain a given word part.
 ####                Output the words and the number of times they occur, ordered
 ####                primarily by this count and secondarily lexically by the words.
 ####                If -u is used, provide a unique (lexically ordered) list without the count.
+####                The word part is matched literally (it is not a regular expression).
 ####
-#### USAGE        : findwordpart -h
+#### USAGE        : find_word_part -h
 ####
-#### EXAMPLE      : findwordpart -x -p -f -u ~/movie_screenplays/theapartment.html wise
+#### EXAMPLE      : find_word_part -x -p -f -u ~/movie_screenplays/theapartment.html wise
 ####                This command line:
 ####                  1). (-x): Converts an HTML file to a text file.
 ####                  2). (-p): Treats "wise" as a word fragment, only finding matches in larger
@@ -28,32 +29,28 @@ YELLOW='\033[0;33m'  # YELLOW
 MAGENTA='\033[0;35m' # MAGENTA
 NC='\033[0m'         # NORMAL COLOR
 
-## Standard Linux commands.
-AWK=gawk
-BASENAME=basename
-CUT=cut
-GREP=egrep
-GREPCHK=grep
-RM=rm
-SORT=sort
-TR=tr
-UNIQ=uniq
+## Standard Linux commands. (GREP is used as "grep -E"; egrep is deprecated by GNU grep.)
+AWK="gawk"
+GREP="grep"
+SORT="sort"
+TR="tr"
+UNIQ="uniq"
 
 ## Non-standard command, needed when using the -x option which
 ## scraps a html file, placing contents into a temporary text file
 ## for further processing.
-HTML2TEXT=html2text
+HTML2TEXT="html2text"
 
 ## Get this script name without its path.
-cmd=$($BASENAME "$0")
+cmd=${0##*/}
 
 ## Standard program names and their full paths.
-program_names=("AWK" "BASENAME" "CUT" "GREP" "RM" "SORT" "TR" "UNIQ")
-programs=("$AWK" "$BASENAME" "$CUT" "$GREPCHK" "$RM" "$SORT" "$TR" "$UNIQ")
+program_names=("AWK" "GREP" "SORT" "TR" "UNIQ")
+programs=("$AWK" "$GREP" "$SORT" "$TR" "$UNIQ")
 
-## Temp file. Used with the -x option to create a text from an HTML file.
-tmpFile=$(mktemp "${TMPDIR:-/tmp}/${cmd}_tmp.XXXXXX")
-trap 'rm -f "$tmpFile"' EXIT INT QUIT
+## Temp file. Created only when the -x option converts an HTML file to text.
+tmpFile=""
+trap '[[ -n "$tmpFile" ]] && rm -f "$tmpFile"' EXIT
 
 ## By default, we don't want any of the options set: -c, -f, -p, -u, -w, -x.
 CASESENSITIVEFLAG=1
@@ -74,6 +71,7 @@ usage() {
 	echo -e "\n${GREEN}DESCRIPTION:${NC} Find all words in a file that contain a given word or word part." >&2
 	echo "             By default, matches ignore case and are ordered by " >&2
 	echo "             number of occurrences, and secondarily ordered lexically." >&2
+	echo "             The word part is matched literally, not as a regular expression." >&2
 	echo -e "\n${GREEN}USAGE  :${NC} ${MAGENTA}${cmd}${NC} [-h] [-c] [-f] [-p] [-u] [-w] [-x] file word_part" >&2
 	echo -e "\n${GREEN}Options:${NC}" >&2
 	echo "         -h -- Help message." >&2
@@ -85,7 +83,7 @@ usage() {
 	echo "         -x -- Assume input file is an html file." >&2
 	echo -e "\n${GREEN}Args   :${NC}" >&2
 	echo -e "          file     : The file, text or html, to process." >&2
-	echo "          word_part: A word or word fragment." >&2
+	echo "          word_part: A word or word fragment (matched literally; may start with '-')." >&2
 	echo -e "\n${GREEN}EXAMPLE:${NC}  $cmd -c -f -p -u -x ~/movie_plays/theapartment.html wise" >&2
 	echo -e "\n          In this example an HTML file is processed (-x), finding matches" >&2
 	echo "          in words strictly containing the word part, \"wise\" (-p)." >&2
@@ -95,36 +93,46 @@ usage() {
 }
 
 ## Check for existence of supporting programs.
+## Arguments: the program paths followed by the same number of program names.
+## Prints the missing programs (NAME -> PATH) and returns non-zero if any are missing.
 check_exists() {
-	local prgs=($@)
+	local prgs=("$@")
 	local N=$((${#prgs[@]} / 2))
-	local ary=("\n${GREEN}NAME\t-> PATH${NC}")
-
-	## Need to take care of this program first as it is used below.
-	if ! command -v "$CUT" &>/dev/null; then
-		ary[1]="\nCUT -> $CUT"
-		echo "${ary[@]}"
-		return 10
-	fi
+	local missing=()
+	local i prg prgn
 
 	## Check for existence/executability of supporting programs.
-	for i in $(eval echo {0..$((N - 1))}); do
-		prg=$(echo ${prgs[$i]} | $CUT -d" " -f1 || true)
-		prgn=$(echo ${prgs[$((i + N))]} | $CUT -d" " -f1 || true)
+	for ((i = 0; i < N; i++)); do
+		prg=${prgs[i]%% *}
+		prgn=${prgs[i + N]%% *}
 
 		## Check for executability of program, $prg.
 		if ! command -v "$prg" &>/dev/null; then
-			ary[$i]="\n$prgn\t-> $prg"
+			missing+=("$prgn -> $prg")
 		fi
 	done
 
 	## Check if there were missing programs, if so return error.
-	if [[ ${#ary[@]} -eq 1 ]]; then
-		## Return success
+	if [[ ${#missing[@]} -eq 0 ]]; then
 		return 0
+	fi
+	printf '\n%bNAME -> PATH%b' "$GREEN" "$NC"
+	printf '\n%s' "${missing[@]}"
+	printf '\n'
+	return 20
+}
+
+## Escape a string so that grep -E matches it literally.
+escape_regex() {
+	printf '%s' "$1" | $SED 's/[][\.*^$+?(){}|\\/]/\\&/g'
+}
+
+## Fold matches to lower case when -f is given; otherwise pass them through.
+fold_case() {
+	if [ $FOLDFLAG -eq 0 ]; then
+		$TR 'A-Z' 'a-z'
 	else
-		echo "${ary[@]}"
-		return 20
+		cat
 	fi
 }
 
@@ -134,7 +142,7 @@ check_exists() {
 while getopts ":hcfpuwx" opt; do
 	case $opt in
 	h)
-		usage "$cmd" >&2
+		usage "$cmd"
 		exit 0
 		;;
 	c)
@@ -180,17 +188,12 @@ done
 shift $((OPTIND - 1))
 
 ## Check that the supporting programs used in this script exist.
-## Turn 'failure on command' off.
-set +e
-missing_prgs=$(check_exists "${programs[@]}" "${program_names[@]}")
-if [ $? -ne 0 ]; then
+SED="sed"
+if ! missing_prgs=$(check_exists "${programs[@]}" "$SED" "${program_names[@]}" "SED"); then
 	echo -e "\n${RED}ERROR($cmd):${NC} Missing/non-executable supporting programs:$missing_prgs" >&2
 	echo -e "\nAborting, no action taken." >&2
 	exit 4
 fi
-
-## Turn 'failure on command' back on.
-set -e
 
 ## Check that we have two arguments.
 if [ $# -ne 2 ]; then
@@ -205,6 +208,16 @@ file="$1"
 ## Word part to look for.
 wordPart="$2"
 
+if [ -z "$wordPart" ]; then
+	echo -e "\n${RED}ERROR($cmd):${NC} The word part must not be empty." >&2
+	exit 7
+fi
+
+if [ ! -r "$file" ]; then
+	echo -e "\n${RED}ERROR($cmd):${NC} The file, \"$file\", does not exist or is not readable." >&2
+	exit 8
+fi
+
 ## If input file is an HTML file, convert its content to text.
 if [ $HTMLFLAG -eq 0 ]; then
 	if ! command -v "$HTML2TEXT" &>/dev/null; then
@@ -212,19 +225,23 @@ if [ $HTMLFLAG -eq 0 ]; then
 		echo "Aborting, no action taken." >&2
 		exit 6
 	fi
+	tmpFile=$(mktemp "${TMPDIR:-/tmp}/${cmd}_tmp.XXXXXX")
 	$HTML2TEXT "$file" >"$tmpFile"
 	file="$tmpFile"
 fi
 
+## The word part is matched literally: escape it for grep -E.
+literal=$(escape_regex "$wordPart")
+
 ## Default: look for the word or words that contain <wordPart>.
 ##          exact pattern is used for an exact match of wordPart (-w option).
 ##          and in some cases to filter out exact matches (-p option).
-pattern="$wordPart"
-exact_pattern="^$wordPart$"
+pattern="$literal"
+exact_pattern="^${literal}\$"
 
 ## Only Look for words that contain <wordPart>.
 if [ $PARTFLAG -eq 0 ]; then
-	pattern=".*$wordPart.*"
+	pattern=".*${literal}.*"
 fi
 
 ## Only look for the words, <wordPart>.
@@ -233,47 +250,37 @@ if [ $WORDFLAG -eq 0 ]; then
 fi
 
 ## By default, ignore case, but if flag is true, respect case.
-CASE_SWITCH="-i"
+case_switch=(-i)
 if [ $CASESENSITIVEFLAG -eq 0 ]; then
-	CASE_SWITCH=""
+	case_switch=()
 fi
 
-## By default, there is no case folding, but if flag is true, fold matches to lower case.
-TRANSLATE="$TR 'A' 'A'"
-if [ $FOLDFLAG -eq 0 ]; then
-	TRANSLATE="$TR 'A-Z' 'a-z'"
-fi
-
-## Find all words in the text file, <textFile>, that match <pattern>.
-words=$($GREP $CASE_SWITCH "$wordPart" "$file" | $TR $' ,.;?!+="\t[]()<>{}' '\n' | $GREP $CASE_SWITCH "$pattern" || true)
-if [[ "$words" == "" ]]; then
-	echo ""
-	exit 0
-fi
+## Find all words in the text file that match <pattern>: split the matching lines into
+## words (at white space and punctuation), then keep the words that match.
+words=$($GREP -E "${case_switch[@]}" -e "$literal" -- "$file" | $TR $' ,.;?!+="\t[]()<>{}' '\n' | $GREP -E "${case_switch[@]}" -e "$pattern" || true)
 
 ## Filtering is adjusted to remove exact matches when -p is specified.
-if [ $PARTFLAG -eq 0 ]; then
-	words=$(echo "$words" | $GREP $CASE_SWITCH -v "$exact_pattern" || true)
-fi
-if [[ "$words" == "" ]]; then
-	echo ""
-	exit 0
+if [ $PARTFLAG -eq 0 ] && [ -n "$words" ]; then
+	words=$($GREP -E "${case_switch[@]}" -v -e "$exact_pattern" <<< "$words" || true)
 fi
 
 ## We use grep -v '^ *$' to remove any blank lines and then get unique matches and sort them.
-words=$(echo "$words" | $TRANSLATE | $SORT | $GREP -v '^ *$' | $UNIQ -c | $SORT -k2,2 | $SORT -rn -k1,1 -s || true)
-if [[ "$words" == "" ]]; then
-	echo ""
+if [ -n "$words" ]; then
+	words=$(fold_case <<< "$words" | $SORT | $GREP -v -e '^ *$' | $UNIQ -c | $SORT -k2,2 | $SORT -rn -k1,1 -s || true)
+fi
+
+if [ -z "$words" ]; then
+	echo "No matches found." >&2
 	exit 0
 fi
 
 ## If -u specified, just get the unique words ordered lexically.
 if [ $UNIQFLAG -eq 0 ]; then
-	words=$(echo "$words" | $AWK -F" " '{print($2);}' | $SORT || true)
+	words=$($AWK '{print($2);}' <<< "$words" | $SORT || true)
 fi
 
 ## Print the words out.
-echo "$words"
+printf '%s\n' "$words"
 
 # Exit successfully.
 exit 0

@@ -2,7 +2,7 @@
 
 #### AUTHOR       : Roland Scott McIntire
 #### DATE         : Dec 2022
-#### LAST MODIFIED: Dec 31, 2023
+#### LAST MODIFIED: Sep 6, 2025
 #### DESCRIPTION  : This script finds duplicate labels in LaTeX projects and outputs the files and line numbers for each duplicate.
 ####
 #### NOTE         : The script will avoid examining labels that have been commented out.
@@ -19,20 +19,20 @@ LGREEN='\033[1;32m'
 LPURP='\033[1;35m'
 NC='\033[0m' # No Color
 
-## Ascii Bolding
-BOLD=$(tput bold)
-NORM=$(tput sgr0)
+## Ascii Bolding (only when a terminal is available; tput fails without TERM, e.g. under cron).
+BOLD=$(tput bold 2>/dev/null || true)
+NORM=$(tput sgr0 2>/dev/null || true)
 
 # Commands used.
-AWK=gawk
-GREP=egrep
-SED=sed
-SORT=sort
-UNIQ=uniq
-XARGS=xargs
+AWK="gawk"
+GREP="grep"
+SED="sed"
+SORT="sort"
+UNIQ="uniq"
+XARGS="xargs"
 
 ## Get the name of this script.
-cmd=$(basename "$0")
+cmd=${0##*/}
 
 ## Default directory tree path to search and default LaTeX file extension glob pattern.
 DIR="."
@@ -47,16 +47,16 @@ Usage() {
 	echo "             makes finding duplicate labels difficult as the LaTeX log file" >&2
 	echo -e "             does not indicate which files/lines are responsible." >&2
 	echo -e "${BOLD}${LPURP}\nUSAGE      :${NC} ${RED}$cmd${NC}${NORM} [-h] [-d directory-tree  (default .    )]" >&2
-	echo -e "                            [-p latex-ext-pat]  (default *.tex)]" >&2
+	echo -e "                            [-p latex-ext-pat]  (default '*.tex')]" >&2
 	echo -e "\n${BOLD}${LPURP}Options    :${NC}" >&2
 	echo "             -h -- Help message." >&2
 	echo "             -d -- Directory path of LaTeX project." >&2
-	echo "             -p -- LaTeX glob pattern describing LaTeX file extension used in project." >&2
+	echo "             -p -- Glob pattern (quoted, so the shell does not expand it) matching the LaTeX file names." >&2
 	echo -e "\n${BOLD}${LPURP}Args       :${NC} NONE" >&2
 	echo -e "\n${LGREEN}EXAMPLE 1  :${NC} cd ~/proj/latex_proj; $cmd" >&2
 	echo -e "${LGREEN}EXAMPLE 2  :${NC} $cmd -d ~/proj/latex_proj " >&2
-	echo -e "${LGREEN}EXAMPLE 3  :${NC} $cmd -d ~/proj/latex_proj -p *.tex" >&2
-	echo -e "${LGREEN}EXAMPLE 4  :${NC} $cmd -d ~/proj/latex_proj -p *.[lt]*" >&2
+	echo -e "${LGREEN}EXAMPLE 3  :${NC} $cmd -d ~/proj/latex_proj -p '*.tex'" >&2
+	echo -e "${LGREEN}EXAMPLE 4  :${NC} $cmd -d ~/proj/latex_proj -p '*.[lt]*'" >&2
 }
 
 ##---------------  PROCESS COMMAND LINE OPTIONS -------------------------------------------
@@ -68,7 +68,7 @@ while getopts ":hd:p:" opt; do
 		;;
 	d) # Store directory tree path.
 		DIR=$OPTARG ;;
-	p) # Store directory tree path.
+	p) # Store the LaTeX file name pattern.
 		TEX_FILE_PAT=$OPTARG ;;
 	:) # Option exists argument
 		echo -e "${LRED}Error:${NC} Option, \"-$OPTARG\", expected argument.${NC}" 1>&2
@@ -90,7 +90,8 @@ shift $((OPTIND - 1))
 
 ## Check for arguments -- should be none as we only allow options.
 if [[ $# -gt 0 ]]; then
-	echo -e "${BOLD}${LRED}This script does not take arguments -- only options.\n${NC}${NORM}" 1>&2
+	echo -e "${BOLD}${LRED}This script does not take arguments -- only options.${NC}${NORM}" 1>&2
+	echo -e "(A -p pattern must be quoted, e.g. -p '*.tex', or the shell expands it into file names.)\n" 1>&2
 	echo "<<<---- *HELP* ---->>>" 1>&2
 	Usage
 	echo "<<<---- *HELP* ---->>>" 1>&2
@@ -114,40 +115,36 @@ fi
 
 ##---------------  FIND DUPLICATE LABELS  --------------------------------------------------------
 
-## Turn off 'failure on command' -- needed when no duplicates are found.
-## The command, grep, fails when it finds nothing.
-set +e
-
 ## Walk over all LaTeX files (matches <TEX_FILE_PAT>) in the directory tree starting at <DIR>.
-## 1). Find all lines containing '\label', strip LaTeX comments, then extract all label names.
+## 1). Collect every line containing '\label' as "file:line:text" and strip LaTeX comments
+##     from the text (a '%' not preceded by a backslash starts a comment).
 ## 2). Count the number of times each label occurs in the project.
-## 3). Report labels that occur more than once along with associated file names and line numbers.
+## 3). Report labels that occur more than once along with the associated file names and line numbers,
+##     taken from the same comment-stripped lines, so a commented-out label is neither counted nor listed.
 ## NOTE: Even if a file matches <TEX_FILE_PAT> below, it will be ignored if its contents are binary.
 ##
 ## Print "No Duplicate Labels Found" if we did not encounter any duplicates.
-TOKEN="ZX-YZXY-ZXYZXYZ-XYZX-Y"
-find "$DIR" -name "${TEX_FILE_PAT}" -print0 | xargs -0 $GREP -I -h '\\label\{' /dev/null |
-	$SED 's/\([^\\]\)%.*/\1/; s/^%.*//' | $GREP '\\label\{' |
-	grep -o '\\label{[^}]*}' | $SED 's/\\label{//; s/}//' | $SORT | $UNIQ -c | $SORT -rn |
-	$AWK -F" " '{if ($1 > 1) {print($2);}}' |
-	while read -r duplabel; do
+## (grep returns 1 when it finds nothing; that is not an error here.)
+label_lines=$(find "$DIR" -type f -name "${TEX_FILE_PAT}" -print0 | $SORT -z |
+	$XARGS -0 -r $GREP -I -n -H -- '\\label{' /dev/null 2>/dev/null |
+	$SED 's/\([^\\]\)%.*/\1/' |
+	$GREP -- '\\label{' || true)
+
+## Duplicates are listed by decreasing count, then by label (byte order, so the report
+## does not depend on the locale).
+report=$($GREP -o -- '\\label{[^}]*}' <<< "$label_lines" |
+	$SED 's/\\label{//; s/}$//' | LC_ALL=C $SORT | $UNIQ -c | LC_ALL=C $SORT -k1,1nr -k2 |
+	$AWK '{if ($1 > 1) {$1 = ""; sub(/^ /, ""); print;}}' |
+	while IFS= read -r duplabel; do
 		echo "Duplicate: $duplabel"
-		find "$DIR" -name "${TEX_FILE_PAT}" -print0 |
-			$XARGS -0 -I{} grep -n "\\label{$duplabel}" {} /dev/null |
-			$SED "s/^/\\$TOKEN/"
-	done |
-	{
-		read -r fline
-		if [[ -z "$fline" ]]; then
-			echo " "
-		else
-			echo "$fline"
-			while read -r rline; do
-				echo "$rline" | $SED "s/^$TOKEN/   /"
-			done
-		fi
-	} |
-	$SED 's/^[ ]*$/No Duplicate Labels Found./'
+		$GREP -F -- "\\label{$duplabel}" <<< "$label_lines" | $SED 's/^/   /' || true
+	done || true)
+
+if [[ -z "$report" ]]; then
+	echo "No Duplicate Labels Found."
+else
+	printf '%s\n' "$report"
+fi
 
 ## Exit successfully
 exit 0

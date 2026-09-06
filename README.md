@@ -108,7 +108,7 @@
              does not indicate which files/lines are responsible for the duplications.
 
 **USAGE      :** find_dup_label [-h] [-d directory-tree  (default .    )]
-                            [-p latex-ext-pat]  (default *.tex)]
+                            [-p 'latex-ext-pat' (quoted, so the shell does not expand it)]  (default *.tex)]
 
 **Options    :**
 
@@ -122,10 +122,14 @@
 
 **EXAMPLE 2  :** find_dup_label -d ~/proj/latex_proj
 
-**EXAMPLE 3  :** find_dup_label -d ~/proj/latex_proj -p *.tex
+**EXAMPLE 3  :** find_dup_label -d ~/proj/latex_proj -p '*.tex'
 
-**EXAMPLE 4  :** find_dup_label -d ~/proj/latex_proj -p *.[lt]*
+**EXAMPLE 4  :** find_dup_label -d ~/proj/latex_proj -p '*.[lt]*'
 
 ## Version
 1.0.5
 
+
+## Tests
+
+Run `./tests.sh` to exercise the three scripts on small fixtures (no system dictionary or `html2text` needed).
